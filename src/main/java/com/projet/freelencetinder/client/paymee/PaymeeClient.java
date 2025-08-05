@@ -82,5 +82,30 @@ public class PaymeeClient {
            .block();
     }
 
+    /** Payout (v2) vers un bénéficiaire (RIB ou wallet). */
+    public String payout(BigDecimal amount, String currency, String beneficiary, String reference) {
+        ObjectNode body = mapper.createObjectNode()
+                .put("vendor",        props.getVendor())
+                .put("amount",        amount)
+                .put("currency",      currency)
+                .put("note",          reference)
+                .put("beneficiary",   beneficiary);
+
+        ObjectNode response = web.post()
+           .uri("/v2/payouts/create")
+           .header("Authorization", "Token " + props.getPrivateKey())
+           .bodyValue(body)
+           .retrieve()
+           .onStatus(HttpStatusCode::isError,
+                     r -> r.bodyToMono(String.class)
+                           .flatMap(msg -> Mono.error(new PaymeeApiException(msg))))
+           .bodyToMono(ObjectNode.class)
+           .block();
+
+        String payoutId = response.path("data").path("payout_id").asText(null);
+        if (payoutId == null) throw new PaymeeApiException("Référence payout manquante");
+        return payoutId;
+    }
+
     public record PaymeeCheckout(String id, String paymentUrl) {}
 }

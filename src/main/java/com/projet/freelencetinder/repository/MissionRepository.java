@@ -13,5 +13,9 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	
 	/* Méthodes custom ajoutables dans MissionRepository */
 	List<Mission> findByClientId(Long clientId);
+	
+	
+	List<Mission> findByStatutAndFreelanceSelectionneIsNotNull(Mission.Statut statut);
+
 
 }

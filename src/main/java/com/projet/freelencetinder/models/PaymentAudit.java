@@ -12,8 +12,11 @@ public class PaymentAudit {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column
     private Long trancheId;
+
+    @Column
+    private Long withdrawalRequestId;
 
     @Column(nullable = false, length = 80)
     private String event;
@@ -35,6 +38,9 @@ public class PaymentAudit {
 
     public Long getTrancheId() { return trancheId; }
     public void setTrancheId(Long trancheId) { this.trancheId = trancheId; }
+
+    public Long getWithdrawalRequestId() { return withdrawalRequestId; }
+    public void setWithdrawalRequestId(Long withdrawalRequestId) { this.withdrawalRequestId = withdrawalRequestId; }
 
     public String getEvent() { return event; }
     public void setEvent(String event) { this.event = event; }
