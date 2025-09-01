@@ -21,6 +21,11 @@ public class TranchePaiementResponseDTO {
     private LocalDateTime dateVersement;
     private String paymeePaymentUrl;
 
+    // Nouveaux indicateurs
+    private boolean required;
+    private boolean finale;
+    private Long livrableAssocieId;
+
     /* ---------- getters / setters ---------- */
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -60,4 +65,11 @@ public class TranchePaiementResponseDTO {
 
     public String getPaymeePaymentUrl() { return paymeePaymentUrl; }
     public void setPaymeePaymentUrl(String paymeePaymentUrl) { this.paymeePaymentUrl = paymeePaymentUrl; }
+
+    public boolean isRequired() { return required; }
+    public void setRequired(boolean required) { this.required = required; }
+    public boolean isFinale() { return finale; }
+    public void setFinale(boolean finale) { this.finale = finale; }
+    public Long getLivrableAssocieId() { return livrableAssocieId; }
+    public void setLivrableAssocieId(Long livrableAssocieId) { this.livrableAssocieId = livrableAssocieId; }
 }

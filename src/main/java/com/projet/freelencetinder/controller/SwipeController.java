@@ -52,23 +52,26 @@ public class SwipeController {
 
     /* ================================================================
        2. Swipe FREELANCE → mission
-       POST /api/swipes/mission/{missionId}/freelance/{freelanceId}?decision=LIKE
-       OU body: { "decision": "LIKE" }
+       POST /api/swipes/mission/{missionId}/freelance/{freelanceId}?decision=LIKE[&dwellTimeMs=1234]
+       OU body: { "decision": "LIKE", "dwellTimeMs": 1234 }
        ================================================================ */
     @PostMapping("/mission/{missionId}/freelance/{freelanceId}")
     public ResponseEntity<Swipe> swipeMission(@PathVariable Long missionId,
                                               @PathVariable Long freelanceId,
                                               @RequestParam(required = false) Decision decision,
+                                              @RequestParam(required = false) Long dwellTimeMs, // AJOUT
                                               @RequestBody(required = false) SwipeRequest body) {
 
         Decision effective = resolveDecision(decision, body);
-        Swipe swipe = swipeService.swipeMission(freelanceId, missionId, effective);
+        Long     dwell     = resolveDwellTime(dwellTimeMs, body); // AJOUT
+        Swipe swipe = swipeService.swipeMission(freelanceId, missionId, effective, dwell);
         return ResponseEntity.ok(swipe);
     }
 
     /* ================================================================
        3. Swipe CLIENT → freelance
-       POST /api/swipes/mission/{missionId}/client/{clientId}/freelance/{freelanceId}?decision=LIKE
+       POST /api/swipes/mission/{missionId}/client/{clientId}/freelance/{freelanceId}?decision=LIKE[&dwellTimeMs=1234]
+       OU body: { "decision": "LIKE", "dwellTimeMs": 1234 }
        ================================================================ */
     @PostMapping("/mission/{missionId}/client/{clientId}/freelance/{freelanceId}")
     public ResponseEntity<ClientSwipe> clientSwipeFreelance(
@@ -76,11 +79,13 @@ public class SwipeController {
             @PathVariable Long clientId,
             @PathVariable Long freelanceId,
             @RequestParam(required = false) Decision decision,
+            @RequestParam(required = false) Long dwellTimeMs, // AJOUT
             @RequestBody(required = false) SwipeRequest body) {
 
         Decision effective = resolveDecision(decision, body);
+        Long     dwell     = resolveDwellTime(dwellTimeMs, body); // AJOUT
         ClientSwipe cs = swipeService.clientSwipeFreelance(
-                clientId, missionId, freelanceId, effective);
+                clientId, missionId, freelanceId, effective, dwell);
         return ResponseEntity.ok(cs);
     }
 
@@ -131,6 +136,42 @@ public class SwipeController {
     }
 
     /* ================================================================
+       8. Voir les freelances ayant liké une mission (vue client)
+       GET /api/swipes/mission/{missionId}/likes?clientId=123
+       ================================================================ */
+    @GetMapping("/mission/{missionId}/likes")
+    public ResponseEntity<List<FreelanceSummaryDTO>> getFreelancersWhoLikedMission(
+            @PathVariable Long missionId,
+            @RequestParam Long clientId) {
+
+        if (clientId == null) {
+            throw new IllegalArgumentException("clientId est requis");
+        }
+
+        List<FreelanceSummaryDTO> freelancers =
+            swipeService.getFreelancersWhoLikedMission(clientId, missionId);
+
+        return ResponseEntity.ok(freelancers);
+    }
+
+    /**
+     * Explorer les freelances compatibles avec une mission (matching compétences).
+     * GET /api/swipes/mission/{missionId}/explore?clientId=123
+     */
+    @GetMapping("/mission/{missionId}/explore")
+    public ResponseEntity<List<FreelanceSummaryDTO>> exploreFreelancers(
+            @PathVariable Long missionId,
+            @RequestParam Long clientId) {
+
+        if (clientId == null) {
+            throw new IllegalArgumentException("clientId est requis");
+        }
+        List<FreelanceSummaryDTO> result =
+            swipeService.getFreelancersMatchingMission(clientId, missionId);
+        return ResponseEntity.ok(result);
+    }
+
+    /* ================================================================
        Gestion locale d’erreurs (optionnel)
        ================================================================ */
     @ExceptionHandler(IllegalArgumentException.class)
@@ -152,62 +193,24 @@ public class SwipeController {
         throw new IllegalArgumentException("Decision (LIKE ou DISLIKE) requise");
     }
 
+    // récupère dwellTimeMs soit via query param, soit via body
+    private Long resolveDwellTime(Long param, SwipeRequest body) {
+        if (param != null) return param;
+        if (body != null) return body.getDwellTimeMs();
+        return null;
+    }
+
     /* ================================================================
        DTO interne pour requêtes (body JSON)
        ================================================================ */
     public static class SwipeRequest {
         private Decision decision;
+        private Long dwellTimeMs; // analytics
+
         public Decision getDecision() { return decision; }
         public void setDecision(Decision decision) { this.decision = decision; }
+
+        public Long getDwellTimeMs() { return dwellTimeMs; }
+        public void setDwellTimeMs(Long dwellTimeMs) { this.dwellTimeMs = dwellTimeMs; }
     }
-    
-    
-    
-    
-    
-    
-    
-    /* ================================================================
-    8. Voir les freelances ayant liké une mission (vue client)
-    GET /api/swipes/mission/{missionId}/likes?clientId=123
-    ================================================================ */
- @GetMapping("/mission/{missionId}/likes")
- public ResponseEntity<List<FreelanceSummaryDTO>> getFreelancersWhoLikedMission(
-         @PathVariable Long missionId,
-         @RequestParam Long clientId) {
-
-     if (clientId == null) {
-         throw new IllegalArgumentException("clientId est requis");
-     }
-
-     List<FreelanceSummaryDTO> freelancers =
-         swipeService.getFreelancersWhoLikedMission(clientId, missionId);
-
-     return ResponseEntity.ok(freelancers);
- }
- 
- 
- 
- 
- 
- 
- 
- 
- /**
-  * Explorer les freelances compatibles avec une mission (matching compétences).
-  * GET /api/swipes/mission/{missionId}/explore?clientId=123
-  */
- @GetMapping("/mission/{missionId}/explore")
- public ResponseEntity<List<FreelanceSummaryDTO>> exploreFreelancers(
-         @PathVariable Long missionId,
-         @RequestParam Long clientId) {
-
-     if (clientId == null) {
-         throw new IllegalArgumentException("clientId est requis");
-     }
-     List<FreelanceSummaryDTO> result =
-         swipeService.getFreelancersMatchingMission(clientId, missionId);
-     return ResponseEntity.ok(result);
- }
-
 }

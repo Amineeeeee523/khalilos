@@ -14,7 +14,11 @@ public class RestExceptionHandler {
     }
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorDto> business(BusinessException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorDto(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorDto(ex.getMessage()));
+    }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorDto> illegalArg(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(new ErrorDto(ex.getMessage()));
     }
     @ExceptionHandler(PaymeeApiException.class)
     public ResponseEntity<ErrorDto> paymee(PaymeeApiException ex) {

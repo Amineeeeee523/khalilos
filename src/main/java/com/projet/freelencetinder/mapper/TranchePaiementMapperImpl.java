@@ -8,10 +8,9 @@ import com.projet.freelencetinder.models.TranchePaiement;
  * Implémentation manuelle (temporaire) du mapper.
  * Quand MapStruct sera configuré, tu pourras supprimer ce fichier.
  */
-@Component                 // <- Spring détecte le bean
+@Component
 public class TranchePaiementMapperImpl implements TranchePaiementMapper {
 
-    /* --------- DTO -> Entity --------- */
     @Override
     public TranchePaiement toEntity(TranchePaiementCreateDTO dto) {
         if (dto == null) return null;
@@ -21,11 +20,9 @@ public class TranchePaiementMapperImpl implements TranchePaiementMapper {
         entity.setTitre(dto.getTitre());
         entity.setMontantBrut(dto.getMontantBrut());
         entity.setDevise(dto.getDevise());
-        // mission / client / freelance seront posés par le service
-        return entity;
+        return entity; // mission / client / freelance seront posés par le service
     }
 
-    /* --------- Entity -> DTO --------- */
     @Override
     public TranchePaiementResponseDTO toDto(TranchePaiement e) {
         if (e == null) return null;
@@ -44,6 +41,9 @@ public class TranchePaiementMapperImpl implements TranchePaiementMapper {
         dto.setDateValidation(e.getDateValidation());
         dto.setDateVersement(e.getDateVersement());
         dto.setPaymeePaymentUrl(e.getPaymeePaymentUrl());
+        dto.setRequired(e.isRequired());
+        dto.setFinale(e.isFinale());
+        dto.setLivrableAssocieId(e.getLivrableAssocie() != null ? e.getLivrableAssocie().getId() : null);
         return dto;
     }
 }

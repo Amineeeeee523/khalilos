@@ -2,6 +2,9 @@ package com.projet.freelencetinder.dto;
 
 import java.time.Instant;
 
+import com.projet.freelencetinder.models.Mission.Categorie;
+import com.projet.freelencetinder.models.Mission.Gouvernorat;
+
 /** Payload envoyé sur /user/{id}/queue/matches */
 public class MatchNotification {
 
@@ -12,9 +15,15 @@ public class MatchNotification {
     private String missionTitre;
     private String clientNom;
     private String freelanceNom;
-    private String clientPhotoUrl;    // AJOUT
-    private String freelancePhotoUrl; // AJOUT
+    private String clientPhotoUrl;    // AJOUT antérieur
+    private String freelancePhotoUrl; // AJOUT antérieur
     private Instant sentAt = Instant.now();
+
+    /* ======== AJOUTS ======== */
+    private Boolean superLike;        // le match a été déclenché par un super-like côté freelance ?
+    private Boolean superInvite;      // … ou par un super-invite côté client ?
+    private Gouvernorat missionGouvernorat; // Tunisie
+    private Categorie   missionCategorie;
 
     public MatchNotification() { }
 
@@ -25,8 +34,8 @@ public class MatchNotification {
                              String missionTitre,
                              String clientNom,
                              String freelanceNom,
-                             String clientPhotoUrl,    // AJOUT
-                             String freelancePhotoUrl) { // AJOUT
+                             String clientPhotoUrl,
+                             String freelancePhotoUrl) {
         this.conversationId = conversationId;
         this.missionId      = missionId;
         this.clientId       = clientId;
@@ -34,8 +43,8 @@ public class MatchNotification {
         this.missionTitre   = missionTitre;
         this.clientNom      = clientNom;
         this.freelanceNom   = freelanceNom;
-        this.clientPhotoUrl = clientPhotoUrl;         // AJOUT
-        this.freelancePhotoUrl = freelancePhotoUrl;   // AJOUT
+        this.clientPhotoUrl = clientPhotoUrl;
+        this.freelancePhotoUrl = freelancePhotoUrl;
     }
 
     /* ---------- getters & setters ---------- */
@@ -63,11 +72,22 @@ public class MatchNotification {
     public Instant getSentAt()         { return sentAt; }
     public void    setSentAt(Instant sentAt)              { this.sentAt = sentAt; }
 
-    // AJOUT
     public String getClientPhotoUrl() { return clientPhotoUrl; }
     public void setClientPhotoUrl(String clientPhotoUrl) { this.clientPhotoUrl = clientPhotoUrl; }
 
-    // AJOUT
     public String getFreelancePhotoUrl() { return freelancePhotoUrl; }
     public void setFreelancePhotoUrl(String freelancePhotoUrl) { this.freelancePhotoUrl = freelancePhotoUrl; }
+
+    // AJOUTS
+    public Boolean getSuperLike() { return superLike; }
+    public void setSuperLike(Boolean superLike) { this.superLike = superLike; }
+
+    public Boolean getSuperInvite() { return superInvite; }
+    public void setSuperInvite(Boolean superInvite) { this.superInvite = superInvite; }
+
+    public Gouvernorat getMissionGouvernorat() { return missionGouvernorat; }
+    public void setMissionGouvernorat(Gouvernorat missionGouvernorat) { this.missionGouvernorat = missionGouvernorat; }
+
+    public Categorie getMissionCategorie() { return missionCategorie; }
+    public void setMissionCategorie(Categorie missionCategorie) { this.missionCategorie = missionCategorie; }
 }

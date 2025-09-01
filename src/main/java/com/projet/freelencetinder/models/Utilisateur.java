@@ -1,6 +1,7 @@
 package com.projet.freelencetinder.models;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -16,10 +17,15 @@ import jakarta.validation.constraints.*;
 @Table(
     name = "utilisateur",
     indexes = {
-        @Index(name = "idx_user_type",      columnList = "typeUtilisateur"),
-        @Index(name = "idx_client_subtype", columnList = "typeClient"),
-        @Index(name = "idx_user_email",     columnList = "email"),
-        @Index(name = "idx_user_localisation", columnList = "localisation")
+        @Index(name = "idx_user_type",           columnList = "typeUtilisateur"),
+        @Index(name = "idx_client_subtype",      columnList = "typeClient"),
+        @Index(name = "idx_user_email",          columnList = "email"),
+        @Index(name = "idx_user_localisation",   columnList = "localisation"),
+        /* ====== AJOUTS : index utiles pour le matching/filtrage ====== */
+        @Index(name = "idx_user_disponibilite",  columnList = "disponibilite"),
+        @Index(name = "idx_user_mobilite",       columnList = "mobilite"),
+        @Index(name = "idx_user_timezone",       columnList = "timezone"),
+        @Index(name = "idx_user_gouvernorat",    columnList = "gouvernorat") // *** AJOUT ***
     },
     uniqueConstraints = {
         @UniqueConstraint(name = "uk_utilisateur_email", columnNames = "email")
@@ -90,6 +96,10 @@ public class Utilisateur {
     @Enumerated(EnumType.STRING) private NiveauExperience niveauExperience;
     @Size(max = 160) private String localisation;
 
+    /** Gouvernorat (lié à l'utilisateur, pas à la mission) */
+    @Enumerated(EnumType.STRING)
+    private Mission.Gouvernorat gouvernorat; // *** AJOUT ***
+
     @ElementCollection(targetClass = Mission.Categorie.class)
     @Enumerated(EnumType.STRING)
     @CollectionTable(name = "utilisateur_categories",
@@ -110,6 +120,8 @@ public class Utilisateur {
     private Set<String> listeBadges = new HashSet<>();
 
     @DecimalMin("0.0") @DecimalMax("5.0") private Double noteMoyenne;
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private Integer nombreAvis = 0; // *** AJOUT ***
     private Integer projetsTermines;
 
     /* ===================== Dimensions CLIENT ===================== */
@@ -162,6 +174,110 @@ public class Utilisateur {
     @OneToMany(mappedBy = "freelancer") @JsonIgnore
     private List<Livrable> livrablesEnvoyes = new ArrayList<>();
 
+    /* ===================================================================== */
+    /* ===================== AJOUTS POUR CARTES & SWIPE ===================== */
+    /* ===================================================================== */
+
+    /* -------- Profil / headline / seniorité -------- */
+    @Size(max = 140) private String titreProfil;                  // ex. "Ingénieur Backend Java/Angular"
+    private Integer anneesExperience;                              // total années d'exp
+
+    /* -------- Localisation et disponibilité avancée -------- */
+    @Size(max = 60)  private String timezone = "Africa/Tunis";     // ex. Africa/Tunis
+    @Enumerated(EnumType.STRING) private Mobilite mobilite = Mobilite.REMOTE;
+    private LocalDate dateDisponibilite;                           // date de début possible
+    @Min(0) @Max(7) private Integer chargeHebdoSouhaiteeJours;     // j/sem. souhaités
+
+    /* Langues avec niveaux (pour la carte) */
+    @ElementCollection
+    @CollectionTable(name = "utilisateur_langues",
+            joinColumns = @JoinColumn(name = "utilisateur_id"))
+    @MapKeyEnumerated(EnumType.STRING)
+    @Column(name = "niveau_langue", length = 10)
+    @Enumerated(EnumType.STRING)
+    private Map<Langue, NiveauLangue> langues = new HashMap<>();
+
+    /* Compétences avec niveau (en plus du Set<String> existant) */
+    @ElementCollection
+    @CollectionTable(name = "utilisateur_competences_niveaux",
+            joinColumns = @JoinColumn(name = "utilisateur_id"))
+    @MapKeyColumn(name = "competence", length = 120)
+    @Column(name = "niveau", length = 12)
+    @Enumerated(EnumType.STRING)
+    private Map<String, NiveauMaitrise> competencesNiveaux = new HashMap<>();
+
+    /* Modèles d’engagement préférés & flexibilité tarifaire */
+    @ElementCollection(targetClass = EngagementModel.class)
+    @Enumerated(EnumType.STRING)
+    @CollectionTable(name = "utilisateur_engagement_models",
+            joinColumns = @JoinColumn(name = "utilisateur_id"))
+    @Column(name = "modele", length = 12)
+    private Set<EngagementModel> modelesEngagementPreferes = new HashSet<>();
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 15)
+    private PreferenceDuree preferenceDuree = PreferenceDuree.INDIFFERENT; // *** AJOUT ***
+
+    @DecimalMin("0.0") @DecimalMax("100.0")
+    private Double flexibiliteTarifairePourcent; // ex. ±10%
+
+    /* Vérifications / conformité (pour badges “Vérifié”) */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean emailVerifie = false;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean telephoneVerifie = false;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean identiteVerifiee = false; // KYC pièce d’identité
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean ribVerifie = false;       // RIB/IBAN validé
+    @Enumerated(EnumType.STRING)
+    @Column(length = 15)
+    private StatutKyc kycStatut = StatutKyc.NON_DEMARRE;
+
+    /* Indicateurs qualité/réputation (pour carte client) */
+    @DecimalMin("0.0") @DecimalMax("100.0") private Double tauxReussite;      // %
+    @DecimalMin("0.0") @DecimalMax("100.0") private Double tauxRespectDelais; // %
+    @DecimalMin("0.0") @DecimalMax("100.0") private Double tauxReembauche;    // %
+    private Integer delaiReponseHeures;                                        // moyenne en h
+    private Integer delaiReponseMedianMinutes;                                 // médiane en min
+
+    /* Certifications (affichage carte/modale) */
+    @ElementCollection
+    @CollectionTable(name = "utilisateur_certifications",
+            joinColumns = @JoinColumn(name = "utilisateur_id"))
+    @Column(name = "certif", length = 160)
+    private List<String> certifications = new ArrayList<>();
+
+    /* Réseaux pro (icônes sur la carte) */
+    @Size(max = 250) private String linkedinUrl; // *** AJOUT ***
+    @Size(max = 250) private String githubUrl;   // *** AJOUT ***
+
+    /* Préférences & garde-fous côté messagerie/flux */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean autoriseContactAvantMatch = false; // politique: en général false
+
+    /* Quotas & gamification avancée */
+    @Column(nullable = false, columnDefinition = "integer default 30")
+    private Integer quotaSwipesQuotidien = 30;
+    private LocalDateTime quotaSwipesDernierReset;
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private Integer superLikesRestantsDuJour = 0;
+    private LocalDateTime dernierSuperLikeAt;
+
+    /* Santé du compte (modération) */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private Integer signalementsRecus = 0;
+    @DecimalMin("0.0") @DecimalMax("1.0")
+    private Double suspicionFraudeScore; // 0..1
+
+    /* Fiabilité paiement côté client (pour rassurer freelances) */
+    private Integer delaiPaiementMoyenJours;         // ex. 7 jours
+    @DecimalMin("0.0") @DecimalMax("100.0")
+    private Double fiabilitePaiement;                // %
+    @Size(max = 60) private String prestataireEscrowFavori; // ex. Paymee
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean exigeDepotAvantChat = false;
+
     /* ===================== Hooks JPA ===================== */
     @PrePersist
     protected void onCreate() {
@@ -171,6 +287,10 @@ public class Utilisateur {
         if (nombreSwipes    == null) nombreSwipes    = 0;
         if (likesRecus      == null) likesRecus      = 0;
         if (matchesObtenus  == null) matchesObtenus  = 0;
+        if (nombreAvis      == null) nombreAvis      = 0; // *** AJOUT ***
+        /* AJOUTS : init quotas et resets */
+        if (quotaSwipesDernierReset == null) quotaSwipesDernierReset = this.dateCreation;
+        if (superLikesRestantsDuJour == null) superLikesRestantsDuJour = 0;
     }
     @PreUpdate
     protected void onUpdate() { this.derniereMiseAJour = LocalDateTime.now(); }
@@ -260,6 +380,9 @@ public class Utilisateur {
     public String getLocalisation() { return localisation; }
     public void setLocalisation(String localisation) { this.localisation = localisation; }
 
+    public Mission.Gouvernorat getGouvernorat() { return gouvernorat; }                  // *** AJOUT ***
+    public void setGouvernorat(Mission.Gouvernorat gouvernorat) { this.gouvernorat = gouvernorat; } // *** AJOUT ***
+
     public Set<Mission.Categorie> getCategories() { return categories; }
     public void setCategories(Set<Mission.Categorie> categories) { this.categories = categories; }
 
@@ -271,6 +394,9 @@ public class Utilisateur {
 
     public Double getNoteMoyenne() { return noteMoyenne; }
     public void setNoteMoyenne(Double noteMoyenne) { this.noteMoyenne = noteMoyenne; }
+
+    public Integer getNombreAvis() { return nombreAvis; }               // *** AJOUT ***
+    public void setNombreAvis(Integer nombreAvis) { this.nombreAvis = nombreAvis; } // *** AJOUT ***
 
     public Integer getProjetsTermines() { return projetsTermines; }
     public void setProjetsTermines(Integer projetsTermines) { this.projetsTermines = projetsTermines; }
@@ -326,6 +452,112 @@ public class Utilisateur {
     public List<Livrable> getLivrablesEnvoyes() { return livrablesEnvoyes; }
     public void setLivrablesEnvoyes(List<Livrable> livrablesEnvoyes) { this.livrablesEnvoyes = livrablesEnvoyes; }
 
+    /* ===== Getters/Setters AJOUTS ===== */
+    public String getTitreProfil() { return titreProfil; }
+    public void setTitreProfil(String titreProfil) { this.titreProfil = titreProfil; }
+
+    public Integer getAnneesExperience() { return anneesExperience; }
+    public void setAnneesExperience(Integer anneesExperience) { this.anneesExperience = anneesExperience; }
+
+    public String getTimezone() { return timezone; }
+    public void setTimezone(String timezone) { this.timezone = timezone; }
+
+    public Mobilite getMobilite() { return mobilite; }
+    public void setMobilite(Mobilite mobilite) { this.mobilite = mobilite; }
+
+    public LocalDate getDateDisponibilite() { return dateDisponibilite; }
+    public void setDateDisponibilite(LocalDate dateDisponibilite) { this.dateDisponibilite = dateDisponibilite; }
+
+    public Integer getChargeHebdoSouhaiteeJours() { return chargeHebdoSouhaiteeJours; }
+    public void setChargeHebdoSouhaiteeJours(Integer chargeHebdoSouhaiteeJours) { this.chargeHebdoSouhaiteeJours = chargeHebdoSouhaiteeJours; }
+
+    public Map<Langue, NiveauLangue> getLangues() { return langues; }
+    public void setLangues(Map<Langue, NiveauLangue> langues) { this.langues = langues; }
+
+    public Map<String, NiveauMaitrise> getCompetencesNiveaux() { return competencesNiveaux; }
+    public void setCompetencesNiveaux(Map<String, NiveauMaitrise> competencesNiveaux) { this.competencesNiveaux = competencesNiveaux; }
+
+    public Set<EngagementModel> getModelesEngagementPreferes() { return modelesEngagementPreferes; }
+    public void setModelesEngagementPreferes(Set<EngagementModel> modelesEngagementPreferes) { this.modelesEngagementPreferes = modelesEngagementPreferes; }
+
+    public PreferenceDuree getPreferenceDuree() { return preferenceDuree; } // *** AJOUT ***
+    public void setPreferenceDuree(PreferenceDuree preferenceDuree) { this.preferenceDuree = preferenceDuree; } // *** AJOUT ***
+
+    public Double getFlexibiliteTarifairePourcent() { return flexibiliteTarifairePourcent; }
+    public void setFlexibiliteTarifairePourcent(Double flexibiliteTarifairePourcent) { this.flexibiliteTarifairePourcent = flexibiliteTarifairePourcent; }
+
+    public boolean isEmailVerifie() { return emailVerifie; }
+    public void setEmailVerifie(boolean emailVerifie) { this.emailVerifie = emailVerifie; }
+
+    public boolean isTelephoneVerifie() { return telephoneVerifie; }
+    public void setTelephoneVerifie(boolean telephoneVerifie) { this.telephoneVerifie = telephoneVerifie; }
+
+    public boolean isIdentiteVerifiee() { return identiteVerifiee; }
+    public void setIdentiteVerifiee(boolean identiteVerifiee) { this.identiteVerifiee = identiteVerifiee; }
+
+    public boolean isRibVerifie() { return ribVerifie; }
+    public void setRibVerifie(boolean ribVerifie) { this.ribVerifie = ribVerifie; }
+
+    public StatutKyc getKycStatut() { return kycStatut; }
+    public void setKycStatut(StatutKyc kycStatut) { this.kycStatut = kycStatut; }
+
+    public Double getTauxReussite() { return tauxReussite; }
+    public void setTauxReussite(Double tauxReussite) { this.tauxReussite = tauxReussite; }
+
+    public Double getTauxRespectDelais() { return tauxRespectDelais; }
+    public void setTauxRespectDelais(Double tauxRespectDelais) { this.tauxRespectDelais = tauxRespectDelais; }
+
+    public Double getTauxReembauche() { return tauxReembauche; }
+    public void setTauxReembauche(Double tauxReembauche) { this.tauxReembauche = tauxReembauche; }
+
+    public Integer getDelaiReponseHeures() { return delaiReponseHeures; }
+    public void setDelaiReponseHeures(Integer delaiReponseHeures) { this.delaiReponseHeures = delaiReponseHeures; }
+
+    public Integer getDelaiReponseMedianMinutes() { return delaiReponseMedianMinutes; }
+    public void setDelaiReponseMedianMinutes(Integer delaiReponseMedianMinutes) { this.delaiReponseMedianMinutes = delaiReponseMedianMinutes; }
+
+    public List<String> getCertifications() { return certifications; }
+    public void setCertifications(List<String> certifications) { this.certifications = certifications; }
+
+    public String getLinkedinUrl() { return linkedinUrl; }   // *** AJOUT ***
+    public void setLinkedinUrl(String linkedinUrl) { this.linkedinUrl = linkedinUrl; } // *** AJOUT ***
+
+    public String getGithubUrl() { return githubUrl; }       // *** AJOUT ***
+    public void setGithubUrl(String githubUrl) { this.githubUrl = githubUrl; } // *** AJOUT ***
+
+    public boolean isAutoriseContactAvantMatch() { return autoriseContactAvantMatch; }
+    public void setAutoriseContactAvantMatch(boolean autoriseContactAvantMatch) { this.autoriseContactAvantMatch = autoriseContactAvantMatch; }
+
+    public Integer getQuotaSwipesQuotidien() { return quotaSwipesQuotidien; }
+    public void setQuotaSwipesQuotidien(Integer quotaSwipesQuotidien) { this.quotaSwipesQuotidien = quotaSwipesQuotidien; }
+
+    public LocalDateTime getQuotaSwipesDernierReset() { return quotaSwipesDernierReset; }
+    public void setQuotaSwipesDernierReset(LocalDateTime quotaSwipesDernierReset) { this.quotaSwipesDernierReset = quotaSwipesDernierReset; }
+
+    public Integer getSuperLikesRestantsDuJour() { return superLikesRestantsDuJour; }
+    public void setSuperLikesRestantsDuJour(Integer superLikesRestantsDuJour) { this.superLikesRestantsDuJour = superLikesRestantsDuJour; }
+
+    public LocalDateTime getDernierSuperLikeAt() { return dernierSuperLikeAt; }
+    public void setDernierSuperLikeAt(LocalDateTime dernierSuperLikeAt) { this.dernierSuperLikeAt = dernierSuperLikeAt; }
+
+    public Integer getSignalementsRecus() { return signalementsRecus; }
+    public void setSignalementsRecus(Integer signalementsRecus) { this.signalementsRecus = signalementsRecus; }
+
+    public Double getSuspicionFraudeScore() { return suspicionFraudeScore; }
+    public void setSuspicionFraudeScore(Double suspicionFraudeScore) { this.suspicionFraudeScore = suspicionFraudeScore; }
+
+    public Integer getDelaiPaiementMoyenJours() { return delaiPaiementMoyenJours; }
+    public void setDelaiPaiementMoyenJours(Integer delaiPaiementMoyenJours) { this.delaiPaiementMoyenJours = delaiPaiementMoyenJours; }
+
+    public Double getFiabilitePaiement() { return fiabilitePaiement; }
+    public void setFiabilitePaiement(Double fiabilitePaiement) { this.fiabilitePaiement = fiabilitePaiement; }
+
+    public String getPrestataireEscrowFavori() { return prestataireEscrowFavori; }
+    public void setPrestataireEscrowFavori(String prestataireEscrowFavori) { this.prestataireEscrowFavori = prestataireEscrowFavori; }
+
+    public boolean isExigeDepotAvantChat() { return exigeDepotAvantChat; }
+    public void setExigeDepotAvantChat(boolean exigeDepotAvantChat) { this.exigeDepotAvantChat = exigeDepotAvantChat; }
+
     /* ===================== Enums ===================== */
     public enum TypeUtilisateur { FREELANCE, CLIENT, ADMIN }
 
@@ -340,4 +572,12 @@ public class Utilisateur {
     public enum Disponibilite    { TEMPS_PLEIN, TEMPS_PARTIEL, PONCTUEL, INDISPONIBLE }
     public enum NiveauExperience { DEBUTANT, INTERMEDIAIRE, EXPERT }
     public enum Langue           { FR, AR, EN }
+
+    /* ===== AJOUTS : enums complémentaires ===== */
+    public enum Mobilite { REMOTE, ONSITE, BOTH }
+    public enum NiveauLangue { A1, A2, B1, B2, C1, C2, NATIF }
+    public enum NiveauMaitrise { DEBUTANT, INTERMEDIAIRE, AVANCE, EXPERT }
+    public enum EngagementModel { FORFAIT, TJM, REGIE }
+    public enum PreferenceDuree { COURT_TERME, LONG_TERME, INDIFFERENT } // *** AJOUT ***
+    public enum StatutKyc { NON_DEMARRE, EN_COURS, VERIFIE, REJETE }
 }

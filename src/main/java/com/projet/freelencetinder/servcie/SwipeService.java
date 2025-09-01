@@ -43,7 +43,7 @@ public class SwipeService {
     private final ClientSwipeRepository clientSwipeRepository;
     private final ConversationService   conversationService;
     private final SimpMessagingTemplate broker;
-
+    private final com.projet.freelencetinder.servcie.CompetenceService competenceService;
 
     @Autowired
     public SwipeService(MissionRepository missionRepository,
@@ -51,13 +51,15 @@ public class SwipeService {
                         SwipeRepository swipeRepository,
                         ClientSwipeRepository clientSwipeRepository,
                         ConversationService conversationService,
-                        SimpMessagingTemplate broker) {
+                        SimpMessagingTemplate broker,
+                        com.projet.freelencetinder.servcie.CompetenceService competenceService) {
         this.missionRepository      = missionRepository;
         this.utilisateurRepository  = utilisateurRepository;
         this.swipeRepository        = swipeRepository;
         this.clientSwipeRepository  = clientSwipeRepository;
         this.conversationService    = conversationService;
         this.broker                 = broker;
+        this.competenceService      = competenceService;
     }
 
     /* =============================================================
@@ -81,143 +83,163 @@ public class SwipeService {
     }
 
     /* =============================================================
-    SWIPE FREELANCE -> MISSION
-    ============================================================= */
- @Transactional
- public Swipe swipeMission(Long freelanceId, Long missionId, Swipe.Decision decision) {
+       SWIPE FREELANCE -> MISSION
+       ============================================================= */
+    @Transactional
+    public Swipe swipeMission(Long freelanceId, Long missionId, Swipe.Decision decision) {
+        return swipeMission(freelanceId, missionId, decision, null);
+    }
 
-     Utilisateur freelance = getFreelanceOrThrow(freelanceId);
-     Mission     mission   = getMissionOrThrow(missionId);
+    // surcharge avec dwellTimeMs (analytics front)
+    @Transactional
+    public Swipe swipeMission(Long freelanceId, Long missionId, Swipe.Decision decision, Long dwellTimeMs) {
 
-     if (mission.getClient() != null && mission.getClient().getId().equals(freelanceId)) {
-         throw new IllegalStateException("Un freelance ne peut pas swiper sa propre mission");
-     }
-     if (!mission.estDisponiblePourSwipe()) {
-         throw new IllegalStateException("Mission non disponible pour swipe (statut=" + mission.getStatut() + ")");
-     }
-     if (swipeRepository.findByFreelanceIdAndMissionId(freelanceId, missionId).isPresent()) {
-         throw new IllegalStateException("Mission déjà swipée par ce freelance");
-     }
+        Utilisateur freelance = getFreelanceOrThrow(freelanceId);
+        Mission     mission   = getMissionOrThrow(missionId);
 
-     Swipe swipe = new Swipe();
-     swipe.setFreelance(freelance);
-     swipe.setMission(mission);
-     swipe.setDecision(decision);
-     swipe.setDateSwipe(LocalDateTime.now());
+        if (mission.getClient() != null && mission.getClient().getId().equals(freelanceId)) {
+            throw new IllegalStateException("Un freelance ne peut pas swiper sa propre mission");
+        }
+        if (!mission.estDisponiblePourSwipe()) {
+            throw new IllegalStateException("Mission non disponible pour swipe (statut=" + mission.getStatut() + ")");
+        }
+        if (swipeRepository.findByFreelanceIdAndMissionId(freelanceId, missionId).isPresent()) {
+            throw new IllegalStateException("Mission déjà swipée par ce freelance");
+        }
 
-     swipeRepository.save(swipe);
+        Swipe swipe = new Swipe();
+        swipe.setFreelance(freelance);
+        swipe.setMission(mission);
+        swipe.setDecision(decision);
+        swipe.setDateSwipe(LocalDateTime.now());
+        if (dwellTimeMs != null && dwellTimeMs >= 0) {
+            swipe.setDwellTimeMs(dwellTimeMs);
+        }
 
-     mission.incrementSwipe();
-     freelance.incrementNombreSwipes();
-     if (decision == Swipe.Decision.LIKE) mission.incrementLike();
+        swipeRepository.save(swipe);
 
-     if (decision == Swipe.Decision.LIKE) {
-         Utilisateur client = mission.getClient();
-         boolean clientLike = clientSwipeRepository
-                 .findByClientIdAndMissionIdAndFreelanceId(client.getId(), missionId, freelanceId)
-                 .map(c -> c.getDecision() == Swipe.Decision.LIKE)
-                 .orElse(false);
+        mission.incrementSwipe();
+        freelance.incrementNombreSwipes();
+        if (decision == Swipe.Decision.LIKE) mission.incrementLike();
 
-         if (clientLike && mission.getStatut() == Statut.EN_ATTENTE) {
-             handleMatch(mission, client, freelance, swipe, null); // Refactor
-         }
-     }
-     return swipe;
- }
+        if (decision == Swipe.Decision.LIKE) {
+            Utilisateur client = mission.getClient();
+            boolean clientLike = clientSwipeRepository
+                    .findByClientIdAndMissionIdAndFreelanceId(client.getId(), missionId, freelanceId)
+                    .map(c -> c.getDecision() == Swipe.Decision.LIKE)
+                    .orElse(false);
 
- /* =============================================================
-    SWIPE CLIENT -> FREELANCE
-    ============================================================= */
- @Transactional
- public ClientSwipe clientSwipeFreelance(Long clientId,
-                                         Long missionId,
-                                         Long freelanceId,
-                                         Swipe.Decision decision) {
+            if (clientLike && mission.getStatut() == Statut.EN_ATTENTE) {
+                handleMatch(mission, client, freelance, swipe, null);
+            }
+        }
+        return swipe;
+    }
 
-     Utilisateur client    = getClientOrThrow(clientId);
-     Mission     mission   = getMissionOrThrow(missionId);
+    /* =============================================================
+       SWIPE CLIENT -> FREELANCE
+       ============================================================= */
+    @Transactional
+    public ClientSwipe clientSwipeFreelance(Long clientId,
+                                            Long missionId,
+                                            Long freelanceId,
+                                            Swipe.Decision decision) {
+        return clientSwipeFreelance(clientId, missionId, freelanceId, decision, null);
+    }
 
-     if (!mission.getClient().getId().equals(clientId)) {
-         throw new IllegalArgumentException("Cette mission n’appartient pas à ce client");
-     }
-     if (mission.getStatut() != Statut.EN_ATTENTE || mission.isVerrouillee()) {
-         throw new IllegalStateException("Mission verrouillée ou engagée");
-     }
+    // surcharge avec dwellTimeMs (analytics front)
+    @Transactional
+    public ClientSwipe clientSwipeFreelance(Long clientId,
+                                            Long missionId,
+                                            Long freelanceId,
+                                            Swipe.Decision decision,
+                                            Long dwellTimeMs) {
 
-     Utilisateur freelance = getFreelanceOrThrow(freelanceId);
+        Utilisateur client    = getClientOrThrow(clientId);
+        Mission     mission   = getMissionOrThrow(missionId);
 
-     if (clientSwipeRepository
-             .findByClientIdAndMissionIdAndFreelanceId(clientId, missionId, freelanceId)
-             .isPresent()) {
-         throw new IllegalStateException("Ce freelance a déjà été swipé par le client");
-     }
+        if (!mission.getClient().getId().equals(clientId)) {
+            throw new IllegalArgumentException("Cette mission n’appartient pas à ce client");
+        }
+        if (mission.getStatut() != Statut.EN_ATTENTE || mission.isVerrouillee()) {
+            throw new IllegalStateException("Mission verrouillée ou engagée");
+        }
 
-     ClientSwipe cs = new ClientSwipe();
-     cs.setClient(client);
-     cs.setMission(mission);
-     cs.setFreelance(freelance);
-     cs.setDecision(decision);
-     cs.setDateSwipe(LocalDateTime.now());
+        Utilisateur freelance = getFreelanceOrThrow(freelanceId);
 
-     clientSwipeRepository.save(cs);
+        if (clientSwipeRepository
+                .findByClientIdAndMissionIdAndFreelanceId(clientId, missionId, freelanceId)
+                .isPresent()) {
+            throw new IllegalStateException("Ce freelance a déjà été swipé par le client");
+        }
 
-     if (decision == Swipe.Decision.LIKE) freelance.incrementLikesRecus();
+        ClientSwipe cs = new ClientSwipe();
+        cs.setClient(client);
+        cs.setMission(mission);
+        cs.setFreelance(freelance);
+        cs.setDecision(decision);
+        cs.setDateSwipe(LocalDateTime.now());
+        if (dwellTimeMs != null && dwellTimeMs >= 0) {
+            cs.setDwellTimeMs(dwellTimeMs);
+        }
 
-     if (decision == Swipe.Decision.LIKE
-             && mission.getStatut() == Statut.EN_ATTENTE
-             && !mission.isVerrouillee()) {
+        clientSwipeRepository.save(cs);
 
-         boolean freelanceLike = swipeRepository
-                 .findByFreelanceIdAndMissionId(freelanceId, missionId)
-                 .map(s -> s.getDecision() == Swipe.Decision.LIKE)
-                 .orElse(false);
+        if (decision == Swipe.Decision.LIKE) freelance.incrementLikesRecus();
 
-         if (freelanceLike) {
-            handleMatch(mission, client, freelance, null, cs); // Refactor
-         }
-     }
-     return cs;
- }
+        if (decision == Swipe.Decision.LIKE
+                && mission.getStatut() == Statut.EN_ATTENTE
+                && !mission.isVerrouillee()) {
 
- 
- /* ============================================================================
- Gestion centralisée d’un MATCH (freelance + client LIKE)
- ============================================================================ */
-private void handleMatch(Mission mission,
-                       Utilisateur client,
-                       Utilisateur freelance,
-                       Swipe swipe,
-                       ClientSwipe clientSwipe)
-{
-  try {
-      mission.affecterFreelance(freelance);
-      freelance.incrementMatchesObtenus();
-      if (swipe       != null) swipe.setAGenereMatch(true);
-      if (clientSwipe != null) clientSwipe.setAGenereMatch(true);
-      missionRepository.save(mission);
+            boolean freelanceLike = swipeRepository
+                    .findByFreelanceIdAndMissionId(freelanceId, missionId)
+                    .map(s -> s.getDecision() == Swipe.Decision.LIKE)
+                    .orElse(false);
 
-      var conv = conversationService
-              .findOrCreate(mission.getId(),
-                             client.getId(),
-                             freelance.getId());
+            if (freelanceLike) {
+               handleMatch(mission, client, freelance, null, cs);
+            }
+        }
+        return cs;
+    }
 
-      MatchNotification notif = new MatchNotification(
-          conv.getId(), mission.getId(),
-          client.getId(), freelance.getId(),
-          mission.getTitre(),
-          client.getNomComplet(), freelance.getNomComplet(),
-          client.getPhotoProfilUrl(),    // AJOUT
-          freelance.getPhotoProfilUrl()  // AJOUT
-      );
+    /* ============================================================================
+       Gestion centralisée d’un MATCH (freelance + client LIKE)
+       ============================================================================ */
+    private void handleMatch(Mission mission,
+                             Utilisateur client,
+                             Utilisateur freelance,
+                             Swipe swipe,
+                             ClientSwipe clientSwipe)
+    {
+      try {
+          mission.affecterFreelance(freelance);
+          freelance.incrementMatchesObtenus();
+          if (swipe       != null) swipe.setAGenereMatch(true);
+          if (clientSwipe != null) clientSwipe.setAGenereMatch(true);
+          missionRepository.save(mission);
 
-   // ✅ APRÈS (ça va marcher !)
-      broker.convertAndSendToUser(client.getEmail(), "/queue/matches", notif);
-      broker.convertAndSendToUser(freelance.getEmail(), "/queue/matches", notif);
+          var conv = conversationService
+                  .findOrCreate(mission.getId(),
+                                 client.getId(),
+                                 freelance.getId());
 
-  } catch (OptimisticLockingFailureException ex) {
-      throw new IllegalStateException("Conflit de mise à jour (match concurrent)", ex);
-  }
-}
+          MatchNotification notif = new MatchNotification(
+              conv.getId(), mission.getId(),
+              client.getId(), freelance.getId(),
+              mission.getTitre(),
+              client.getNomComplet(), freelance.getNomComplet(),
+              client.getPhotoProfilUrl(),
+              freelance.getPhotoProfilUrl()
+          );
+
+          broker.convertAndSendToUser(client.getEmail(), "/queue/matches", notif);
+          broker.convertAndSendToUser(freelance.getEmail(), "/queue/matches", notif);
+
+      } catch (OptimisticLockingFailureException ex) {
+          throw new IllegalStateException("Conflit de mise à jour (match concurrent)", ex);
+      }
+    }
 
     /* =============================================================
        ASSIGNATION DIRECTE (ADMIN / CLIENT)
@@ -391,6 +413,34 @@ private void handleMatch(Mission mission,
         dto.setPrenom(client.getPrenom());
         dto.setPhotoUrl(client.getPhotoProfilUrl());
         dto.setVille(client.getLocalisation());
+        dto.setTypeClient(client.getTypeClient());
+
+        // ===== AJOUTS : champs publics côté client =====
+        dto.setGouvernorat(client.getGouvernorat());
+        dto.setTimezone(client.getTimezone());
+
+        // Réputation / stats client
+        dto.setMissionsPubliees(client.getMissionsPubliees());
+        dto.setNoteDonneeMoy(client.getNoteDonneeMoy());
+        dto.setFiabilitePaiement(client.getFiabilitePaiement());
+        dto.setDelaiPaiementMoyenJours(client.getDelaiPaiementMoyenJours());
+
+        // KYC / vérifications
+        dto.setEmailVerifie(client.isEmailVerifie());
+        dto.setTelephoneVerifie(client.isTelephoneVerifie());
+        dto.setIdentiteVerifiee(client.isIdentiteVerifiee());
+        dto.setRibVerifie(client.isRibVerifie());
+        dto.setKycStatut(client.getKycStatut());
+
+        // Entreprise
+        dto.setNomEntreprise(client.getNomEntreprise());
+        dto.setSiteEntreprise(client.getSiteEntreprise());
+        dto.setDescriptionEntreprise(client.getDescriptionEntreprise());
+
+        // Badges
+        if (client.getListeBadges() != null && !client.getListeBadges().isEmpty()) {
+            dto.setBadges(client.getListeBadges());
+        }
         return dto;
     }
 
@@ -400,7 +450,15 @@ private void handleMatch(Mission mission,
     private boolean hasSkillOverlap(Mission m, Utilisateur freelance) {
         if (m.getCompetencesRequises() == null || m.getCompetencesRequises().isEmpty()) return true;
         if (freelance.getCompetences() == null) return false;
-        return m.getCompetencesRequises().stream().anyMatch(freelance.getCompetences()::contains);
+
+        // Canonicalize both sides for robust matching (case/accents)
+        java.util.Set<String> missionCanon = m.getCompetencesRequises().stream()
+                .map(competenceService::toCanonical)
+                .collect(java.util.stream.Collectors.toSet());
+        java.util.Set<String> freelancerCanon = freelance.getCompetences().stream()
+                .map(competenceService::toCanonical)
+                .collect(java.util.stream.Collectors.toSet());
+        return missionCanon.stream().anyMatch(freelancerCanon::contains);
     }
 
     private int scoreMissionPourFreelance(Mission m, Utilisateur freelance, Set<Mission.Categorie> categoriesPref) {
@@ -452,34 +510,33 @@ private void handleMatch(Mission mission,
     }
 
     /* =============================================================
-    FREELANCES QUI ONT LIKÉ UNE MISSION (vue client)
-    ============================================================= */
- public List<FreelanceSummaryDTO> getFreelancersWhoLikedMission(Long clientId, Long missionId) {
-     Utilisateur client = getClientOrThrow(clientId);
-     Mission mission    = getMissionOrThrow(missionId);
+       FREELANCES QUI ONT LIKÉ UNE MISSION (vue client)
+       ============================================================= */
+    public List<FreelanceSummaryDTO> getFreelancersWhoLikedMission(Long clientId, Long missionId) {
+        Utilisateur client = getClientOrThrow(clientId);
+        Mission mission    = getMissionOrThrow(missionId);
 
-     if (!mission.getClient().getId().equals(clientId)) {
-         throw new IllegalArgumentException("Cette mission n’appartient pas à ce client");
-     }
+        if (!mission.getClient().getId().equals(clientId)) {
+            throw new IllegalArgumentException("Cette mission n’appartient pas à ce client");
+        }
 
-     Set<Long> dejaSwipes = clientSwipeRepository
-             .findByClientIdAndMissionId(clientId, missionId)
-             .stream()
-             .map(cs -> cs.getFreelance().getId())
-             .collect(Collectors.toSet());
+        Set<Long> dejaSwipes = clientSwipeRepository
+                .findByClientIdAndMissionId(clientId, missionId)
+                .stream()
+                .map(cs -> cs.getFreelance().getId())
+                .collect(Collectors.toSet());
 
-     return swipeRepository
-             .findByMissionIdAndDecision(missionId, Swipe.Decision.LIKE)
-             .stream()
-             .map(Swipe::getFreelance)
-             .filter(f -> !dejaSwipes.contains(f.getId()))
-             .map(this::toFreelanceSummaryDTO)
-             .collect(Collectors.toList());
- }
-
+        return swipeRepository
+                .findByMissionIdAndDecision(missionId, Swipe.Decision.LIKE)
+                .stream()
+                .map(Swipe::getFreelance)
+                .filter(f -> !dejaSwipes.contains(f.getId()))
+                .map(this::toFreelanceSummaryDTO)
+                .collect(Collectors.toList());
+    }
 
     /* -------------------------------------------------------------
-       Mapping Freelance -> FreelanceSummaryDTO
+       Mapping Freelance -> FreelanceSummaryDTO (ENRICHI)
        ------------------------------------------------------------- */
     private FreelanceSummaryDTO toFreelanceSummaryDTO(Utilisateur f) {
         FreelanceSummaryDTO dto = new FreelanceSummaryDTO();
@@ -488,50 +545,85 @@ private void handleMatch(Mission mission,
         dto.setPrenom(f.getPrenom());
         dto.setPhotoUrl(f.getPhotoProfilUrl());
         dto.setLocalisation(f.getLocalisation());
-        dto.setNiveauExperience(
-            f.getNiveauExperience() != null ? f.getNiveauExperience().name() : null);
-        dto.setDisponibilite(
-            f.getDisponibilite() != null ? f.getDisponibilite().name() : null);
+        dto.setGouvernorat(f.getGouvernorat()); // AJOUT
+        dto.setNiveauExperience(f.getNiveauExperience() != null ? f.getNiveauExperience().name() : null);
+        dto.setDisponibilite(f.getDisponibilite() != null ? f.getDisponibilite().name() : null);
         dto.setTarifHoraire(f.getTarifHoraire());
+        dto.setTarifJournalier(f.getTarifJournalier());
         dto.setNoteMoyenne(f.getNoteMoyenne());
         dto.setCompetences(f.getCompetences());
+        dto.setPortfolioUrls(f.getPortfolioUrls()); // AJOUT
 
         dto.setBadgePrincipal(
             f.getListeBadges() != null && !f.getListeBadges().isEmpty()
                 ? f.getListeBadges().iterator().next()
                 : null
         );
+
+        // Champs “carte” supplémentaires
+        dto.setTitreProfil(f.getTitreProfil());
+        dto.setAnneesExperience(f.getAnneesExperience());
+        dto.setMobilite(f.getMobilite());
+        dto.setTimezone(f.getTimezone());
+        dto.setModelesEngagementPreferes(
+            f.getModelesEngagementPreferes() == null ? null : new java.util.ArrayList<>(f.getModelesEngagementPreferes())
+        );
+        dto.setDateDisponibilite(f.getDateDisponibilite() != null ? f.getDateDisponibilite().toString() : null);
+        dto.setChargeHebdoSouhaiteeJours(f.getChargeHebdoSouhaiteeJours());
+        dto.setLangues(f.getLangues());
+        dto.setCompetencesNiveaux(f.getCompetencesNiveaux());
+        dto.setTauxReussite(f.getTauxReussite());
+        dto.setTauxRespectDelais(f.getTauxRespectDelais());
+        dto.setTauxReembauche(f.getTauxReembauche());
+        dto.setDelaiReponseHeures(f.getDelaiReponseHeures());
+        dto.setDelaiReponseMedianMinutes(f.getDelaiReponseMedianMinutes());
+        dto.setCertifications(f.getCertifications());
+
+        // KYC / vérifs
+        dto.setEmailVerifie(f.isEmailVerifie());
+        dto.setTelephoneVerifie(f.isTelephoneVerifie());
+        dto.setIdentiteVerifiee(f.isIdentiteVerifiee());
+        dto.setRibVerifie(f.isRibVerifie());
+        dto.setKycStatut(f.getKycStatut());
+
+        // Nouveaux champs
+        dto.setPreferenceDuree(f.getPreferenceDuree());
+        dto.setNombreAvis(f.getNombreAvis());
+        dto.setLinkedinUrl(f.getLinkedinUrl());
+        dto.setGithubUrl(f.getGithubUrl());
+
         return dto;
     }
+
     /* =============================================================
-    EXPLORE FREELANCES POUR UNE MISSION (match par catégorie)
-    ============================================================= */
- @Transactional(readOnly = true)
- public List<FreelanceSummaryDTO> getFreelancersMatchingMission(Long clientId, Long missionId) {
+       EXPLORE FREELANCES POUR UNE MISSION (match par catégorie)
+       ============================================================= */
+    @Transactional(readOnly = true)
+    public List<FreelanceSummaryDTO> getFreelancersMatchingMission(Long clientId, Long missionId) {
 
-     Utilisateur client  = getClientOrThrow(clientId);
-     Mission     mission = getMissionOrThrow(missionId);
-     if (!mission.getClient().getId().equals(clientId)) {
-         throw new IllegalArgumentException("Cette mission n’appartient pas à ce client");
-     }
+        Utilisateur client  = getClientOrThrow(clientId);
+        Mission     mission = getMissionOrThrow(missionId);
+        if (!mission.getClient().getId().equals(clientId)) {
+            throw new IllegalArgumentException("Cette mission n’appartient pas à ce client");
+        }
 
-     Mission.Categorie categorie = mission.getCategorie();
+        Mission.Categorie categorie = mission.getCategorie();
 
-     Set<Long> dejaSwipes = clientSwipeRepository
-             .findByClientIdAndMissionId(clientId, missionId)
-             .stream()
-             .map(cs -> cs.getFreelance().getId())
-             .collect(Collectors.toSet());
+        Set<Long> dejaSwipes = clientSwipeRepository
+                .findByClientIdAndMissionId(clientId, missionId)
+                .stream()
+                .map(cs -> cs.getFreelance().getId())
+                .collect(Collectors.toSet());
 
-     Long dejaAffecte = mission.getFreelanceSelectionne() != null
-             ? mission.getFreelanceSelectionne().getId() : null;
+        Long dejaAffecte = mission.getFreelanceSelectionne() != null
+                ? mission.getFreelanceSelectionne().getId() : null;
 
-     return utilisateurRepository.findAll().stream()
-         .filter(u -> u.getTypeUtilisateur() == TypeUtilisateur.FREELANCE && u.isEstActif())
-         .filter(u -> u.getCategories() != null && u.getCategories().contains(categorie))
-         .filter(u -> !dejaSwipes.contains(u.getId()))
-         .filter(u -> !Objects.equals(u.getId(), dejaAffecte))
-         .map(this::toFreelanceSummaryDTO)
-         .collect(Collectors.toList());
- }
+        return utilisateurRepository.findAll().stream()
+            .filter(u -> u.getTypeUtilisateur() == TypeUtilisateur.FREELANCE && u.isEstActif())
+            .filter(u -> u.getCategories() != null && u.getCategories().contains(categorie))
+            .filter(u -> !dejaSwipes.contains(u.getId()))
+            .filter(u -> !Objects.equals(u.getId(), dejaAffecte))
+            .map(this::toFreelanceSummaryDTO)
+            .collect(Collectors.toList());
+    }
 }

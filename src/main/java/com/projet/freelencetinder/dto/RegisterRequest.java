@@ -1,8 +1,10 @@
 package com.projet.freelencetinder.dto;
 
 import java.util.List;
+import java.util.Map;
 
 import com.projet.freelencetinder.models.Mission;
+import com.projet.freelencetinder.models.Mission.Gouvernorat;
 import com.projet.freelencetinder.models.Utilisateur.*;
 import jakarta.validation.constraints.*;
 
@@ -27,17 +29,41 @@ public class RegisterRequest {
     private String photoProfilUrl;
     private Langue languePref;
 
+    /* ======== AJOUTS COMMUNS ======== */
+    private Gouvernorat gouvernorat;            // gouvernorat rattaché à l'utilisateur
+    @Size(max = 250) private String linkedinUrl; // réseaux pro (facultatifs)
+    @Size(max = 250) private String githubUrl;
+
     /* ---------- Attributs FREELANCE ---------- */
-    private List<String> competences;
-    private Double       tarifHoraire;
-    private Double       tarifJournalier;
-    private Disponibilite disponibilite;
+    private List<String>        competences;
+    private Double              tarifHoraire;
+    private Double              tarifJournalier;
+    private Disponibilite       disponibilite;
     @Size(max = 1000) private String  bio;
-    private NiveauExperience niveauExperience;
-    private String localisation;
+    private NiveauExperience    niveauExperience;
+    private String              localisation;
     private List<Mission.Categorie> categories;
-    private List<String> portfolioUrls;
-    private List<String> pushTokens;
+    private List<String>        portfolioUrls;
+    private List<String>        pushTokens;
+
+    /* ======== AJOUTS FREELANCE ======== */
+    private String  titreProfil;
+    private Integer anneesExperience;
+    private String  timezone; // ex. Africa/Tunis
+    private Mobilite mobilite;
+    private String  dateDisponibilite;        // ISO string
+    private Integer chargeHebdoSouhaiteeJours;
+
+    private List<EngagementModel> modelesEngagementPreferes;
+    private PreferenceDuree       preferenceDuree; // COURT_TERME / LONG_TERME / INDIFFERENT
+    private Double                flexibiliteTarifairePourcent;
+
+    private Map<Langue, NiveauLangue>     langues;              // FR/AR/EN + niveau
+    private Map<String, NiveauMaitrise>   competencesNiveaux;   // skill -> niveau
+    private List<String>                  certifications;
+
+    // Compteurs/avis pour accompagner la note moyenne (optionnel, par défaut 0 côté serveur)
+    private Integer nombreAvis;
 
     /* ---------- Attributs CLIENT ---------- */
     private String  nomEntreprise;
@@ -48,6 +74,7 @@ public class RegisterRequest {
     public RegisterRequest() {}
 
     /* ---------- Getters / Setters ---------- */
+
     public String getNom() { return nom; }
     public void setNom(String nom) { this.nom = nom; }
 
@@ -74,6 +101,15 @@ public class RegisterRequest {
 
     public Langue getLanguePref() { return languePref; }
     public void setLanguePref(Langue languePref) { this.languePref = languePref; }
+
+    public Gouvernorat getGouvernorat() { return gouvernorat; }
+    public void setGouvernorat(Gouvernorat gouvernorat) { this.gouvernorat = gouvernorat; }
+
+    public String getLinkedinUrl() { return linkedinUrl; }
+    public void setLinkedinUrl(String linkedinUrl) { this.linkedinUrl = linkedinUrl; }
+
+    public String getGithubUrl() { return githubUrl; }
+    public void setGithubUrl(String githubUrl) { this.githubUrl = githubUrl; }
 
     public List<String> getCompetences() { return competences; }
     public void setCompetences(List<String> competences) { this.competences = competences; }
@@ -104,6 +140,45 @@ public class RegisterRequest {
 
     public List<String> getPushTokens() { return pushTokens; }
     public void setPushTokens(List<String> pushTokens) { this.pushTokens = pushTokens; }
+
+    public String getTitreProfil() { return titreProfil; }
+    public void setTitreProfil(String titreProfil) { this.titreProfil = titreProfil; }
+
+    public Integer getAnneesExperience() { return anneesExperience; }
+    public void setAnneesExperience(Integer anneesExperience) { this.anneesExperience = anneesExperience; }
+
+    public String getTimezone() { return timezone; }
+    public void setTimezone(String timezone) { this.timezone = timezone; }
+
+    public Mobilite getMobilite() { return mobilite; }
+    public void setMobilite(Mobilite mobilite) { this.mobilite = mobilite; }
+
+    public String getDateDisponibilite() { return dateDisponibilite; }
+    public void setDateDisponibilite(String dateDisponibilite) { this.dateDisponibilite = dateDisponibilite; }
+
+    public Integer getChargeHebdoSouhaiteeJours() { return chargeHebdoSouhaiteeJours; }
+    public void setChargeHebdoSouhaiteeJours(Integer chargeHebdoSouhaiteeJours) { this.chargeHebdoSouhaiteeJours = chargeHebdoSouhaiteeJours; }
+
+    public List<EngagementModel> getModelesEngagementPreferes() { return modelesEngagementPreferes; }
+    public void setModelesEngagementPreferes(List<EngagementModel> modelesEngagementPreferes) { this.modelesEngagementPreferes = modelesEngagementPreferes; }
+
+    public PreferenceDuree getPreferenceDuree() { return preferenceDuree; }
+    public void setPreferenceDuree(PreferenceDuree preferenceDuree) { this.preferenceDuree = preferenceDuree; }
+
+    public Double getFlexibiliteTarifairePourcent() { return flexibiliteTarifairePourcent; }
+    public void setFlexibiliteTarifairePourcent(Double flexibiliteTarifairePourcent) { this.flexibiliteTarifairePourcent = flexibiliteTarifairePourcent; }
+
+    public Map<Langue, NiveauLangue> getLangues() { return langues; }
+    public void setLangues(Map<Langue, NiveauLangue> langues) { this.langues = langues; }
+
+    public Map<String, NiveauMaitrise> getCompetencesNiveaux() { return competencesNiveaux; }
+    public void setCompetencesNiveaux(Map<String, NiveauMaitrise> competencesNiveaux) { this.competencesNiveaux = competencesNiveaux; }
+
+    public List<String> getCertifications() { return certifications; }
+    public void setCertifications(List<String> certifications) { this.certifications = certifications; }
+
+    public Integer getNombreAvis() { return nombreAvis; }
+    public void setNombreAvis(Integer nombreAvis) { this.nombreAvis = nombreAvis; }
 
     public String getNomEntreprise() { return nomEntreprise; }
     public void setNomEntreprise(String nomEntreprise) { this.nomEntreprise = nomEntreprise; }

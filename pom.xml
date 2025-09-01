@@ -108,6 +108,13 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- OpenAPI (Swagger UI) for REST docs -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
+        </dependency>
         
 		
 		<!-- MapStruct runtime -->
@@ -127,12 +134,6 @@
     <scope>provided</scope>          <!-- <= clef pour que l’IDE le voie -->
 </dependency>
 
-
-<dependency>
-  <groupId>com.vladmihalcea</groupId>
-  <artifactId>hibernate-types-60</artifactId> <!-- ou 52 si Java 8 -->
-  <version>2.21.1</version> <!-- Dernière version en août 2025 -->
-</dependency>
 
 <dependency>
   <groupId>com.vladmihalcea</groupId>

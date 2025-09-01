@@ -7,17 +7,23 @@ import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.*;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
+import com.projet.freelencetinder.models.StatusLivrable;
 
 /**
- * Tranche (milestone) de paiement sécurisée par escrow.
- * Une mission peut en comporter plusieurs.
+ * Tranche (milestone) de paiement.
+ * MVP (Flouci/D17) : paiement direct (pas d’escrow), commission plateforme = 0.
+ * Phase 2 (Paymee) : escrow + commission possible (réactiver COMMISSION_RATE > 0).
  */
 @Entity
 @Table(
     name = "tranche_paiement",
     indexes = {
         @Index(name = "idx_tranche_statut", columnList = "statut"),
-        @Index(name = "idx_tranche_mission", columnList = "mission_id")
+        @Index(name = "idx_tranche_mission", columnList = "mission_id"),
+        @Index(name = "idx_tranche_mission_statut_ordre", columnList = "mission_id, statut, ordre")
+    },
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_tranche_livrable", columnNames = {"livrable_id"})
     }
 )
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
@@ -25,8 +31,8 @@ import jakarta.validation.constraints.*;
 public class TranchePaiement {
 
     /* ---------- Constantes ---------- */
-    /** Commission plateforme (7 %). */
-    public static final BigDecimal COMMISSION_RATE = new BigDecimal("0.07");
+    /** Commission plateforme (MVP direct = 0 %). Mettre >0 (ex: 0.07) en Phase 2. */
+    public static final BigDecimal COMMISSION_RATE = BigDecimal.ZERO;
 
     /* ---------- Identité ---------- */
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -46,7 +52,7 @@ public class TranchePaiement {
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal montantBrut;
 
-    /** Commission calculée (= montantBrut × 7 %). */
+    /** Commission calculée (= montantBrut × COMMISSION_RATE). */
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal commissionPlateforme;
 
@@ -61,19 +67,26 @@ public class TranchePaiement {
     @Column(nullable = false, length = 30)
     private StatutTranche statut = StatutTranche.EN_ATTENTE_DEPOT;
 
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private boolean required = true;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean finale = false;
+
     /* ---------- Dates ---------- */
     @Column(nullable = false, updatable = false)
     private LocalDateTime dateCreation;
 
-    private LocalDateTime dateDepot;        // quand le client a payé
-    private LocalDateTime dateValidation;   // quand le client valide le livrable
-    private LocalDateTime dateVersement;    // quand l’argent est versé au freelance
+    private LocalDateTime dateDepot;        // génération lien paiement
+    private LocalDateTime dateValidation;   // (utilisé en mode escrow)
+    private LocalDateTime dateVersement;    // webhook PAID
 
-    /* ---------- Paymee ---------- */
-    @Size(max = 100)
-    private String paymeeCheckoutId;   // ID renvoyé par Paymee
-    @Size(max = 600)
-    private String paymeePaymentUrl;   // lien de paiement pour le client
+    /* ---------- Champs de provider (réutilisation générique) ---------- */
+    @Size(max = 128)     // augmenté (tokens parfois longs)
+    private String paymeeCheckoutId;   // utilisé aussi pour stocker le token Flouci
+
+    @Size(max = 1000)    // augmenté (URLs parfois longues)
+    private String paymeePaymentUrl;   // utilisé aussi pour stocker l’URL Flouci
 
     /* ---------- Relations ---------- */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -88,6 +101,11 @@ public class TranchePaiement {
     @JoinColumn(name = "freelance_id", nullable = false)
     private Utilisateur freelance;
 
+    /* ---------- Lien avec un livrable (optionnel) ---------- */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "livrable_id")
+    private Livrable livrableAssocie;
+
     /* ---------- Hooks ---------- */
     @PrePersist
     protected void onCreate() {
@@ -97,7 +115,6 @@ public class TranchePaiement {
 
     @PreUpdate
     protected void onUpdate() {
-        // au cas où le montant évoluerait (rare)
         calculerCommissions();
     }
 
@@ -110,11 +127,10 @@ public class TranchePaiement {
     }
 
     /* ---------- Méthodes métier ---------- */
-    public void marquerDepotEffectue(String paymeeCheckoutId) {
-        // La tranche est en attente de paiement ; Paymee confirmera via webhook.
+    public void marquerDepotEffectue(String checkoutToken) {
         this.statut = StatutTranche.EN_ATTENTE_PAIEMENT;
         this.dateDepot = LocalDateTime.now();
-        this.paymeeCheckoutId = paymeeCheckoutId;
+        this.paymeeCheckoutId = checkoutToken;
     }
 
     public void marquerLivrableValide() {
@@ -128,174 +144,70 @@ public class TranchePaiement {
     }
 
     /* ---------- Getters / Setters ---------- */
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
+    public Integer getOrdre() { return ordre; }
+    public void setOrdre(Integer ordre) { this.ordre = ordre; }
+    public String getTitre() { return titre; }
+    public void setTitre(String titre) { this.titre = titre; }
+    public BigDecimal getMontantBrut() { return montantBrut; }
+    public void setMontantBrut(BigDecimal montantBrut) { this.montantBrut = montantBrut; }
+    public BigDecimal getCommissionPlateforme() { return commissionPlateforme; }
+    public void setCommissionPlateforme(BigDecimal commissionPlateforme) { this.commissionPlateforme = commissionPlateforme; }
+    public BigDecimal getMontantNetFreelance() { return montantNetFreelance; }
+    public void setMontantNetFreelance(BigDecimal montantNetFreelance) { this.montantNetFreelance = montantNetFreelance; }
+    public String getDevise() { return devise; }
+    public void setDevise(String devise) { this.devise = devise; }
+    public StatutTranche getStatut() { return statut; }
+    public void setStatut(StatutTranche statut) { this.statut = statut; }
+    public LocalDateTime getDateCreation() { return dateCreation; }
+    public void setDateCreation(LocalDateTime dateCreation) { this.dateCreation = dateCreation; }
+    public LocalDateTime getDateDepot() { return dateDepot; }
+    public void setDateDepot(LocalDateTime dateDepot) { this.dateDepot = dateDepot; }
+    public LocalDateTime getDateValidation() { return dateValidation; }
+    public void setDateValidation(LocalDateTime dateValidation) { this.dateValidation = dateValidation; }
+    public LocalDateTime getDateVersement() { return dateVersement; }
+    public void setDateVersement(LocalDateTime dateVersement) { this.dateVersement = dateVersement; }
+    public String getPaymeeCheckoutId() { return paymeeCheckoutId; }
+    public void setPaymeeCheckoutId(String paymeeCheckoutId) { this.paymeeCheckoutId = paymeeCheckoutId; }
+    public String getPaymeePaymentUrl() { return paymeePaymentUrl; }
+    public void setPaymeePaymentUrl(String paymeePaymentUrl) { this.paymeePaymentUrl = paymeePaymentUrl; }
+    public Mission getMission() { return mission; }
+    public void setMission(Mission mission) { this.mission = mission; }
+    public Utilisateur getClient() { return client; }
+    public void setClient(Utilisateur client) { this.client = client; }
+    public Utilisateur getFreelance() { return freelance; }
+    public void setFreelance(Utilisateur freelance) { this.freelance = freelance; }
+    public Livrable getLivrableAssocie() { return livrableAssocie; }
+    public void setLivrableAssocie(Livrable livrableAssocie) { this.livrableAssocie = livrableAssocie; }
 
-    public Long getId() {
-        return id;
+    /* ---------- Helpers lecture ---------- */
+    @Transient
+    public boolean isPaid() {
+        return this.statut == StatutTranche.VERSEE_FREELANCE;
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    @Transient
+    public boolean isDeliveryAccepted() {
+        return this.livrableAssocie != null &&
+               this.livrableAssocie.getStatus() == StatusLivrable.VALIDE;
     }
 
-    public Long getVersion() {
-        return version;
-    }
-
-    public void setVersion(Long version) {
-        this.version = version;
-    }
-
-    public Integer getOrdre() {
-        return ordre;
-    }
-
-    public void setOrdre(Integer ordre) {
-        this.ordre = ordre;
-    }
-
-    public String getTitre() {
-        return titre;
-    }
-
-    public void setTitre(String titre) {
-        this.titre = titre;
-    }
-
-    public BigDecimal getMontantBrut() {
-        return montantBrut;
-    }
-
-    public void setMontantBrut(BigDecimal montantBrut) {
-        this.montantBrut = montantBrut;
-    }
-
-    public BigDecimal getCommissionPlateforme() {
-        return commissionPlateforme;
-    }
-
-    public void setCommissionPlateforme(BigDecimal commissionPlateforme) {
-        this.commissionPlateforme = commissionPlateforme;
-    }
-
-    public BigDecimal getMontantNetFreelance() {
-        return montantNetFreelance;
-    }
-
-    public void setMontantNetFreelance(BigDecimal montantNetFreelance) {
-        this.montantNetFreelance = montantNetFreelance;
-    }
-
-    public String getDevise() {
-        return devise;
-    }
-
-    public void setDevise(String devise) {
-        this.devise = devise;
-    }
-
-    public StatutTranche getStatut() {
-        return statut;
-    }
-
-    public void setStatut(StatutTranche statut) {
-        this.statut = statut;
-    }
-
-    public LocalDateTime getDateCreation() {
-        return dateCreation;
-    }
-
-    public void setDateCreation(LocalDateTime dateCreation) {
-        this.dateCreation = dateCreation;
-    }
-
-    public LocalDateTime getDateDepot() {
-        return dateDepot;
-    }
-
-    public void setDateDepot(LocalDateTime dateDepot) {
-        this.dateDepot = dateDepot;
-    }
-
-    public LocalDateTime getDateValidation() {
-        return dateValidation;
-    }
-
-    public void setDateValidation(LocalDateTime dateValidation) {
-        this.dateValidation = dateValidation;
-    }
-
-    public LocalDateTime getDateVersement() {
-        return dateVersement;
-    }
-
-    public void setDateVersement(LocalDateTime dateVersement) {
-        this.dateVersement = dateVersement;
-    }
-
-    public String getPaymeeCheckoutId() {
-        return paymeeCheckoutId;
-    }
-
-    public void setPaymeeCheckoutId(String paymeeCheckoutId) {
-        this.paymeeCheckoutId = paymeeCheckoutId;
-    }
-
-    public String getPaymeePaymentUrl() {
-        return paymeePaymentUrl;
-    }
-
-    public void setPaymeePaymentUrl(String paymeePaymentUrl) {
-        this.paymeePaymentUrl = paymeePaymentUrl;
-    }
-
-    public Mission getMission() {
-        return mission;
-    }
-
-    public void setMission(Mission mission) {
-        this.mission = mission;
-    }
-
-    public Utilisateur getClient() {
-        return client;
-    }
-
-    public void setClient(Utilisateur client) {
-        this.client = client;
-    }
-
-    public Utilisateur getFreelance() {
-        return freelance;
-    }
-
-    public void setFreelance(Utilisateur freelance) {
-        this.freelance = freelance;
-    }
+    public boolean isRequired() { return required; }
+    public void setRequired(boolean required) { this.required = required; }
+    public boolean isFinale() { return finale; }
+    public void setFinale(boolean finale) { this.finale = finale; }
 
     public enum StatutTranche {
-        /** Tranche créée mais le checkout Paymee n'a pas encore été généré. */
         EN_ATTENTE_DEPOT,
-
-        /** Checkout Paymee généré – en attente que le client réalise le paiement. */
         EN_ATTENTE_PAIEMENT,
-
-        /** Paymee a confirmé que les fonds sont bloqués (escrow). */
-        FONDS_BLOQUES,
-
-        /** Freelance a livré – attente de validation client. */
-        EN_ATTENTE_VALIDATION,
-
-        /** Client valide la livraison. */
+        FONDS_BLOQUES,            // non utilisé en MVP direct
+        EN_ATTENTE_VALIDATION,    // utilisé en mode escrow
         VALIDEE,
-
-        /** Fonds libérés et versés au freelance. */
         VERSEE_FREELANCE,
-
-        /** Client a rejeté la livraison. */
         REJETEE,
-
-        /** Erreur lors de la capture Paymee – en attente de retry. */
-        ERREUR_CAPTURE
+        ERREUR_CAPTURE            // non utilisé en MVP direct
     }
 }

@@ -6,7 +6,6 @@ import java.time.LocalDateTime;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "withdrawal_request")
@@ -23,7 +22,6 @@ public class WithdrawalRequest {
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal montant;
 
-    @Size(max = 10)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 3)
     private Devise devise = Devise.TND;
@@ -39,7 +37,7 @@ public class WithdrawalRequest {
 
     private LocalDateTime datePaiement;
 
-    @Size(max = 80)
+    @Column(length = 120)
     private String paymeeReference;
 
     /* ---------- Relations ---------- */

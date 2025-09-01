@@ -1,4 +1,3 @@
-/* PayoutService.java */
 package com.projet.freelencetinder.servcie;
 
 import java.math.BigDecimal;
@@ -16,7 +15,6 @@ import com.projet.freelencetinder.dto.paiement.*;
 import com.projet.freelencetinder.exception.BusinessException;
 import com.projet.freelencetinder.models.*;
 import com.projet.freelencetinder.models.WithdrawalMethod.Type;
-import com.projet.freelencetinder.models.Devise;
 import com.projet.freelencetinder.models.WithdrawalRequest.Statut;
 import com.projet.freelencetinder.repository.*;
 
@@ -63,7 +61,7 @@ public class PayoutService {
                 m.setRib(dto.getRib());
             }
             case D17 -> {
-                if (dto.getWalletNumber() == null || !dto.getWalletNumber().matches("^[0-9]{8}$")) // 8 chiffres
+                if (dto.getWalletNumber() == null || !dto.getWalletNumber().matches("^[0-9]{8}$"))
                     throw new BusinessException("Numéro D17 invalide (8 chiffres)");
                 m.setWalletNumber(dto.getWalletNumber());
             }
@@ -81,7 +79,7 @@ public class PayoutService {
 
         methodRepo.saveAll(existing);
 
-        logEvent(freelanceId, "METHODE_RETRAIT_AJOUTEE", "Id=" + m.getId());
+        logEventGeneric(freelanceId, "METHODE_RETRAIT_AJOUTEE", "Id=" + m.getId());
 
         return toDto(m);
     }
@@ -121,7 +119,7 @@ public class PayoutService {
 
         requestRepo.save(req);
 
-        logEvent(freelanceId, "RETRAIT_DEMANDE", "Montant=" + dto.getMontant());
+        logEventForWithdrawal(req.getId(), "RETRAIT_DEMANDE", "Montant=" + dto.getMontant());
 
         // Appel Paymee
         try {
@@ -130,13 +128,15 @@ public class PayoutService {
             req.setStatut(Statut.PAYE);
             req.setDatePaiement(LocalDateTime.now());
             req.setPaymeeReference(paymeeRef);
-            logEvent(freelanceId, "RETRAIT_PAYE", "Id=" + req.getId());
+            requestRepo.save(req);
+            logEventForWithdrawal(req.getId(), "RETRAIT_PAYE", "Id=" + req.getId());
         } catch (Exception ex) {
             log.error("Erreur payout Paymee", ex);
             req.setStatut(Statut.ERREUR);
+            requestRepo.save(req);
             freelance.setSoldeEscrow(freelance.getSoldeEscrow().add(dto.getMontant())); // rollback solde
             userRepo.save(freelance);
-            logEvent(freelanceId, "RETRAIT_ERREUR", ex.getMessage());
+            logEventForWithdrawal(req.getId(), "RETRAIT_ERREUR", ex.getMessage());
         }
 
         return toDto(req);
@@ -158,7 +158,6 @@ public class PayoutService {
         if (req.getStatut() != Statut.ERREUR) return;
 
         WithdrawalMethod method = req.getMethod();
-        Utilisateur freelance = req.getFreelance();
 
         try {
             String beneficiary = method.getType() == Type.RIB ? method.getRib() : method.getWalletNumber();
@@ -167,7 +166,7 @@ public class PayoutService {
             req.setDatePaiement(java.time.LocalDateTime.now());
             req.setPaymeeReference(ref);
             requestRepo.save(req);
-            logEvent(freelance.getId(), "RETRAIT_PAYE_RETRY", "Id=" + req.getId());
+            logEventForWithdrawal(req.getId(), "RETRAIT_PAYE_RETRY", "Id=" + req.getId());
         } catch (Exception ex) {
             log.error("Retry payout Paymee échoué", ex);
         }
@@ -197,9 +196,17 @@ public class PayoutService {
         return dto;
     }
 
-    private void logEvent(Long userId, String event, String details) {
+    private void logEventGeneric(Long userId, String event, String details) {
         PaymentAudit a = new PaymentAudit();
-        a.setTrancheId(userId); // champ réutilisé pour l'audit générique
+        a.setTrancheId(userId); // usage générique (comme dans ta version)
+        a.setEvent(event);
+        a.setDetails(details);
+        auditRepo.save(a);
+    }
+
+    private void logEventForWithdrawal(Long withdrawalRequestId, String event, String details) {
+        PaymentAudit a = new PaymentAudit();
+        a.setWithdrawalRequestId(withdrawalRequestId);
         a.setEvent(event);
         a.setDetails(details);
         auditRepo.save(a);

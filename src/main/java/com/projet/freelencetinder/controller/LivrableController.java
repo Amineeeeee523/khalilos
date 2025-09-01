@@ -1,6 +1,8 @@
 // src/main/java/com/projet/freelencetinder/controller/LivrableController.java
 package com.projet.freelencetinder.controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,11 +18,14 @@ import com.projet.freelencetinder.models.StatusLivrable;
 import com.projet.freelencetinder.servcie.LivrableService;
 
 import jakarta.validation.Valid;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 
 @RestController
 @RequestMapping("/api/livrables")
 @Validated
 public class LivrableController {
+
+    private static final Logger logger = LoggerFactory.getLogger(LivrableController.class);
 
     private final LivrableService livrableService;
     private final SimpMessagingTemplate broker;   // WebSocket STOMP
@@ -89,7 +94,25 @@ public class LivrableController {
     @PutMapping("/{livrableId}/valider")
     public ResponseEntity<Void> valider(
             @PathVariable Long livrableId,
-            @RequestHeader("X-Client-Id") Long clientId) {
+            @RequestHeader(value = "X-Client-Id", required = false) String clientIdHeader,
+            @RequestParam(value = "clientId", required = false) Long clientIdParam) {
+
+        Long clientId;
+        if (clientIdParam != null) {
+            clientId = clientIdParam;
+        } else if (clientIdHeader != null && !clientIdHeader.isBlank()) {
+            try {
+                clientId = Long.valueOf(clientIdHeader.trim());
+            } catch (NumberFormatException nfe) {
+                return ResponseEntity.badRequest().build(); // X-Client-Id invalide
+            }
+        } else {
+            return ResponseEntity.badRequest().build();     // clientId manquant
+        }
+
+        // Logging structuré pour tracer le clientId
+        logger.info("Validation livrable - livrableId: {}, clientIdHeader: '{}', clientIdParam: {}, clientIdRetenu: {}",
+                livrableId, clientIdHeader, clientIdParam, clientId);
 
         livrableService.validerLivrable(livrableId, clientId);
 
@@ -104,13 +127,46 @@ public class LivrableController {
     @PutMapping("/{livrableId}/rejeter")
     public ResponseEntity<Void> rejeter(
             @PathVariable Long livrableId,
-            @RequestHeader("X-Client-Id") Long clientId,
+            @RequestHeader(value = "X-Client-Id", required = false) String clientIdHeader,
+            @RequestParam(value = "clientId", required = false) Long clientIdParam,
             @RequestBody(required = false) String raison) {
+
+        Long clientId;
+        if (clientIdParam != null) {
+            clientId = clientIdParam;
+        } else if (clientIdHeader != null && !clientIdHeader.isBlank()) {
+            try {
+                clientId = Long.valueOf(clientIdHeader.trim());
+            } catch (NumberFormatException nfe) {
+                return ResponseEntity.badRequest().build(); // X-Client-Id invalide
+            }
+        } else {
+            return ResponseEntity.badRequest().build();     // clientId manquant
+        }
+
+        // Logging structuré pour tracer le clientId
+        logger.info("Rejet livrable - livrableId: {}, clientIdHeader: '{}', clientIdParam: {}, clientIdRetenu: {}",
+                livrableId, clientIdHeader, clientIdParam, clientId);
 
         livrableService.rejeterLivrable(livrableId, clientId, raison);
 
         /* Push notif */
         broker.convertAndSend("/topic/livrables/" + livrableId, "REJECTED");
         return ResponseEntity.noContent().build();
+    }
+
+    @ExceptionHandler({ IllegalArgumentException.class })
+    public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.unprocessableEntity().body(ex.getMessage());
+    }
+
+    @ExceptionHandler({ MethodArgumentNotValidException.class })
+    public ResponseEntity<String> handleValidation(MethodArgumentNotValidException ex) {
+        return ResponseEntity.unprocessableEntity().body("Requête invalide");
+    }
+
+    @ExceptionHandler({ com.projet.freelencetinder.exception.BusinessException.class })
+    public ResponseEntity<String> handleBusiness(com.projet.freelencetinder.exception.BusinessException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
     }
 }

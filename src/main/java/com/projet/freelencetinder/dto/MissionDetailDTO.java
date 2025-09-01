@@ -4,14 +4,20 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import com.projet.freelencetinder.models.Mission.Categorie;
+import com.projet.freelencetinder.models.Mission.Gouvernorat;
 import com.projet.freelencetinder.models.Mission.ModaliteTravail;
+import com.projet.freelencetinder.models.Mission.NiveauBrief;
 import com.projet.freelencetinder.models.Mission.Statut;
+import com.projet.freelencetinder.models.Mission.TypeRemuneration;
+import com.projet.freelencetinder.models.Utilisateur.Langue;
+import com.projet.freelencetinder.models.Utilisateur.NiveauExperience;
+import com.projet.freelencetinder.models.Utilisateur.NiveauLangue;
+import com.projet.freelencetinder.models.Mission.ClosurePolicy;
 
-/**
- * Détail complet d’une mission (vue fiche + état matching).
- */
 public class MissionDetailDTO {
 
     /* ---------- Identité & base ---------- */
@@ -69,9 +75,37 @@ public class MissionDetailDTO {
     private boolean selectionFaite;     // (statut EN_COURS)
     private String resumeCourt;         // [OPTION] snippet description
 
+    /* ======== AJOUTS ======== */
+
+    // Priorisation compétences & langues requises
+    private Map<String, String> competencesPriorisees;                // competence -> MUST/NICE (stringified)
+    private Map<Langue, NiveauLangue> languesRequises;
+    private NiveauExperience niveauExperienceMin;
+
+    // Rémunération
+    private TypeRemuneration typeRemuneration;
+    private BigDecimal budgetMin;
+    private BigDecimal budgetMax;
+    private BigDecimal tjmJournalier;
+
+    // Planning / charge
+    private LocalDate dateDebutSouhaitee;
+    private Integer chargeHebdoJours;
+
+    // Tunisie : gouvernorat & qualité de brief
+    private Gouvernorat gouvernorat;
+    private NiveauBrief qualiteBrief;
+
+    // Activité & affichage
+    private LocalDateTime derniereActiviteAt;
+    private Integer candidatsCount;
+    private Set<String> badges;
+    private List<String> raisonsMatching;
+
     public MissionDetailDTO() {}
 
     /* ===================== Getters / Setters ===================== */
+    // (existants inchangés…)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -182,4 +216,65 @@ public class MissionDetailDTO {
 
     public String getResumeCourt() { return resumeCourt; }
     public void setResumeCourt(String resumeCourt) { this.resumeCourt = resumeCourt; }
+
+    // AJOUTS
+    public Map<String, String> getCompetencesPriorisees() { return competencesPriorisees; }
+    public void setCompetencesPriorisees(Map<String, String> competencesPriorisees) { this.competencesPriorisees = competencesPriorisees; }
+
+    public Map<Langue, NiveauLangue> getLanguesRequises() { return languesRequises; }
+    public void setLanguesRequises(Map<Langue, NiveauLangue> languesRequises) { this.languesRequises = languesRequises; }
+
+    public NiveauExperience getNiveauExperienceMin() { return niveauExperienceMin; }
+    public void setNiveauExperienceMin(NiveauExperience niveauExperienceMin) { this.niveauExperienceMin = niveauExperienceMin; }
+
+    public TypeRemuneration getTypeRemuneration() { return typeRemuneration; }
+    public void setTypeRemuneration(TypeRemuneration typeRemuneration) { this.typeRemuneration = typeRemuneration; }
+
+    public BigDecimal getBudgetMin() { return budgetMin; }
+    public void setBudgetMin(BigDecimal budgetMin) { this.budgetMin = budgetMin; }
+
+    public BigDecimal getBudgetMax() { return budgetMax; }
+    public void setBudgetMax(BigDecimal budgetMax) { this.budgetMax = budgetMax; }
+
+    public BigDecimal getTjmJournalier() { return tjmJournalier; }
+    public void setTjmJournalier(BigDecimal tjmJournalier) { this.tjmJournalier = tjmJournalier; }
+
+    public LocalDate getDateDebutSouhaitee() { return dateDebutSouhaitee; }
+    public void setDateDebutSouhaitee(LocalDate dateDebutSouhaitee) { this.dateDebutSouhaitee = dateDebutSouhaitee; }
+
+    public Integer getChargeHebdoJours() { return chargeHebdoJours; }
+    public void setChargeHebdoJours(Integer chargeHebdoJours) { this.chargeHebdoJours = chargeHebdoJours; }
+
+    public Gouvernorat getGouvernorat() { return gouvernorat; }
+    public void setGouvernorat(Gouvernorat gouvernorat) { this.gouvernorat = gouvernorat; }
+
+    public NiveauBrief getQualiteBrief() { return qualiteBrief; }
+    public void setQualiteBrief(NiveauBrief qualiteBrief) { this.qualiteBrief = qualiteBrief; }
+
+    public LocalDateTime getDerniereActiviteAt() { return derniereActiviteAt; }
+    public void setDerniereActiviteAt(LocalDateTime derniereActiviteAt) { this.derniereActiviteAt = derniereActiviteAt; }
+
+    public Integer getCandidatsCount() { return candidatsCount; }
+    public void setCandidatsCount(Integer candidatsCount) { this.candidatsCount = candidatsCount; }
+
+    public Set<String> getBadges() { return badges; }
+    public void setBadges(Set<String> badges) { this.badges = badges; }
+
+    public List<String> getRaisonsMatching() { return raisonsMatching; }
+    public void setRaisonsMatching(List<String> raisonsMatching) { this.raisonsMatching = raisonsMatching; }
+
+    /* ======== Clôture / policy ======== */
+    private ClosurePolicy closurePolicy;
+    private boolean closedByClient;
+    private boolean closedByFreelancer;
+    private BigDecimal contractTotalAmount;
+
+    public ClosurePolicy getClosurePolicy() { return closurePolicy; }
+    public void setClosurePolicy(ClosurePolicy closurePolicy) { this.closurePolicy = closurePolicy; }
+    public boolean isClosedByClient() { return closedByClient; }
+    public void setClosedByClient(boolean closedByClient) { this.closedByClient = closedByClient; }
+    public boolean isClosedByFreelancer() { return closedByFreelancer; }
+    public void setClosedByFreelancer(boolean closedByFreelancer) { this.closedByFreelancer = closedByFreelancer; }
+    public BigDecimal getContractTotalAmount() { return contractTotalAmount; }
+    public void setContractTotalAmount(BigDecimal contractTotalAmount) { this.contractTotalAmount = contractTotalAmount; }
 }

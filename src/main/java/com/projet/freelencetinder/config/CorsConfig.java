@@ -4,7 +4,9 @@ import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
-import org.springframework.web.cors.*;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class CorsConfig {
@@ -13,21 +15,29 @@ public class CorsConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Origines locales de test
+        // Origines locales autorisées (patterns OK avec allowCredentials=true)
         config.setAllowedOriginPatterns(List.of(
-                "http://localhost:*",
-                "http://127.0.0.1:*"
+            "http://localhost:*",
+            "http://127.0.0.1:*"
+            // Ajoute ici d'autres frontends si besoin (http://192.168.*:*, etc.)
         ));
-        // (Si tu préfères strict : List.of("http://localhost:4200","http://127.0.0.1:5500","http://localhost:5500"))
 
-        config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        // Méthodes permises
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+
+        // ⚠️ Autorise tous les headers (évite d'oublier un header custom : X-Freelancer-Id, X-Client-Id, etc.)
+        config.addAllowedHeader("*");
+
+        // Cookies / Authorization
         config.setAllowCredentials(true);
-        config.setExposedHeaders(List.of(HttpHeaders.SET_COOKIE));
+
+        // Headers exposés côté navigateur (utile pour Set-Cookie, Location, etc.)
+        config.setExposedHeaders(List.of(HttpHeaders.SET_COOKIE, HttpHeaders.LOCATION));
+
+        // Cache du preflight (en secondes)
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Couvre API + WebSocket SockJS (/ws/**)
         source.registerCorsConfiguration("/**", config);
         return source;
     }

@@ -3,21 +3,23 @@ package com.projet.freelencetinder.repository;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import com.projet.freelencetinder.models.WithdrawalMethod;
 
-import org.springframework.data.jpa.repository.Query;
 import jakarta.persistence.LockModeType;
-import org.springframework.data.jpa.repository.Lock;
 
+@Repository
 public interface WithdrawalMethodRepository extends JpaRepository<WithdrawalMethod, Long> {
 
-    List<WithdrawalMethod> findByFreelanceId(Long freelanceId);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select w from WithdrawalMethod w where w.freelance.id = :freelanceId")
+    List<WithdrawalMethod> findByFreelanceIdForUpdate(@Param("freelanceId") Long freelanceId);
+
+    @Query("select w from WithdrawalMethod w where w.freelance.id = :freelanceId")
+    List<WithdrawalMethod> findByFreelanceId(@Param("freelanceId") Long freelanceId);
 
     Optional<WithdrawalMethod> findByFreelanceIdAndPrincipalTrue(Long freelanceId);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select m from WithdrawalMethod m where m.freelance.id = :freelanceId")
-    List<WithdrawalMethod> findByFreelanceIdForUpdate(Long freelanceId);
 }

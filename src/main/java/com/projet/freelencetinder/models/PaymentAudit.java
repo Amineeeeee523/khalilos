@@ -16,6 +16,9 @@ public class PaymentAudit {
     private Long trancheId;
 
     @Column
+    private Long missionId;
+
+    @Column
     private Long withdrawalRequestId;
 
     @Column(nullable = false, length = 80)
@@ -41,6 +44,9 @@ public class PaymentAudit {
 
     public Long getWithdrawalRequestId() { return withdrawalRequestId; }
     public void setWithdrawalRequestId(Long withdrawalRequestId) { this.withdrawalRequestId = withdrawalRequestId; }
+
+    public Long getMissionId() { return missionId; }
+    public void setMissionId(Long missionId) { this.missionId = missionId; }
 
     public String getEvent() { return event; }
     public void setEvent(String event) { this.event = event; }

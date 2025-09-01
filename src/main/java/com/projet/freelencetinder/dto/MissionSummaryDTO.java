@@ -3,14 +3,17 @@ package com.projet.freelencetinder.dto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 import com.projet.freelencetinder.models.Mission.Categorie;
+import com.projet.freelencetinder.models.Mission.Gouvernorat;
 import com.projet.freelencetinder.models.Mission.ModaliteTravail;
 import com.projet.freelencetinder.models.Mission.Statut;
+import com.projet.freelencetinder.models.Mission.TypeRemuneration;
+import com.projet.freelencetinder.models.Mission.NiveauBrief;
+import com.projet.freelencetinder.models.Utilisateur.NiveauExperience;
+import com.projet.freelencetinder.models.Mission.ClosurePolicy;
 
-/**
- * Résumé léger d'une mission (utilisé dans les listes ou le swipe).
- */
 public class MissionSummaryDTO {
 
     private Long id;
@@ -32,9 +35,31 @@ public class MissionSummaryDTO {
 
     private ClientInfoDTO client;
 
+    /* ======== AJOUTS ======== */
+    private TypeRemuneration typeRemuneration;
+    private BigDecimal budgetMin;
+    private BigDecimal budgetMax;
+    private BigDecimal tjmJournalier;
+
+    private Gouvernorat gouvernorat;
+    private Integer chargeHebdoJours;
+    private LocalDate dateDebutSouhaitee;
+
+    private NiveauBrief qualiteBrief;
+    private NiveauExperience niveauExperienceMin;
+
+    private LocalDateTime derniereActiviteAt;
+    private Integer candidatsCount;
+    private Set<String> badges;
+
+    /* ======== Clôture / policy (léger) ======== */
+    private ClosurePolicy closurePolicy;
+    private boolean pretACloturer;
+    private BigDecimal contractTotalAmount;
+
     public MissionSummaryDTO() {}
 
-    // Getters & Setters
+    // Getters & Setters (existants)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -73,4 +98,48 @@ public class MissionSummaryDTO {
 
     public ClientInfoDTO getClient() { return client; }
     public void setClient(ClientInfoDTO client) { this.client = client; }
+
+    // Getters & Setters AJOUTS
+    public TypeRemuneration getTypeRemuneration() { return typeRemuneration; }
+    public void setTypeRemuneration(TypeRemuneration typeRemuneration) { this.typeRemuneration = typeRemuneration; }
+
+    public BigDecimal getBudgetMin() { return budgetMin; }
+    public void setBudgetMin(BigDecimal budgetMin) { this.budgetMin = budgetMin; }
+
+    public BigDecimal getBudgetMax() { return budgetMax; }
+    public void setBudgetMax(BigDecimal budgetMax) { this.budgetMax = budgetMax; }
+
+    public BigDecimal getTjmJournalier() { return tjmJournalier; }
+    public void setTjmJournalier(BigDecimal tjmJournalier) { this.tjmJournalier = tjmJournalier; }
+
+    public Gouvernorat getGouvernorat() { return gouvernorat; }
+    public void setGouvernorat(Gouvernorat gouvernorat) { this.gouvernorat = gouvernorat; }
+
+    public Integer getChargeHebdoJours() { return chargeHebdoJours; }
+    public void setChargeHebdoJours(Integer chargeHebdoJours) { this.chargeHebdoJours = chargeHebdoJours; }
+
+    public LocalDate getDateDebutSouhaitee() { return dateDebutSouhaitee; }
+    public void setDateDebutSouhaitee(LocalDate dateDebutSouhaitee) { this.dateDebutSouhaitee = dateDebutSouhaitee; }
+
+    public NiveauBrief getQualiteBrief() { return qualiteBrief; }
+    public void setQualiteBrief(NiveauBrief qualiteBrief) { this.qualiteBrief = qualiteBrief; }
+
+    public NiveauExperience getNiveauExperienceMin() { return niveauExperienceMin; }
+    public void setNiveauExperienceMin(NiveauExperience niveauExperienceMin) { this.niveauExperienceMin = niveauExperienceMin; }
+
+    public LocalDateTime getDerniereActiviteAt() { return derniereActiviteAt; }
+    public void setDerniereActiviteAt(LocalDateTime derniereActiviteAt) { this.derniereActiviteAt = derniereActiviteAt; }
+
+    public Integer getCandidatsCount() { return candidatsCount; }
+    public void setCandidatsCount(Integer candidatsCount) { this.candidatsCount = candidatsCount; }
+
+    public Set<String> getBadges() { return badges; }
+    public void setBadges(Set<String> badges) { this.badges = badges; }
+
+    public ClosurePolicy getClosurePolicy() { return closurePolicy; }
+    public void setClosurePolicy(ClosurePolicy closurePolicy) { this.closurePolicy = closurePolicy; }
+    public boolean isPretACloturer() { return pretACloturer; }
+    public void setPretACloturer(boolean pretACloturer) { this.pretACloturer = pretACloturer; }
+    public BigDecimal getContractTotalAmount() { return contractTotalAmount; }
+    public void setContractTotalAmount(BigDecimal contractTotalAmount) { this.contractTotalAmount = contractTotalAmount; }
 }

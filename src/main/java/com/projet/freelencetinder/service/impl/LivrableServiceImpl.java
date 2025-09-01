@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,36 +13,52 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.projet.freelencetinder.dto.CreateLivrableRequest;
 import com.projet.freelencetinder.dto.LivrableDto;
+import com.projet.freelencetinder.exception.BusinessException; // ✅ pour 403
 import com.projet.freelencetinder.models.Livrable;
 import com.projet.freelencetinder.models.Mission;
 import com.projet.freelencetinder.models.StatusLivrable;
+import com.projet.freelencetinder.models.TranchePaiement;
+import com.projet.freelencetinder.models.TranchePaiement.StatutTranche;
 import com.projet.freelencetinder.models.Utilisateur;
 import com.projet.freelencetinder.repository.LivrableRepository;
 import com.projet.freelencetinder.repository.MissionRepository;
+import com.projet.freelencetinder.repository.TranchePaiementRepository;
 import com.projet.freelencetinder.repository.UtilisateurRepository;
+import com.projet.freelencetinder.servcie.EscrowService;
 import com.projet.freelencetinder.servcie.FileStorageService;
 import com.projet.freelencetinder.servcie.LivrableService;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 @Transactional
 public class LivrableServiceImpl implements LivrableService {
 
+    private static final Logger logger = LoggerFactory.getLogger(LivrableServiceImpl.class);
+
     private final LivrableRepository livrableRepo;
     private final MissionRepository missionRepo;
     private final UtilisateurRepository userRepo;
     private final FileStorageService fileStorage;
+    private final TranchePaiementRepository trancheRepo;
+    private final EscrowService escrowService;
 
-    /**
-     * Constructeur explicite pour injection des dépendances.
-     */
+    @Value("${payment.mode:DIRECT_FLOUCI}")
+    private String paymentMode;
+
     public LivrableServiceImpl(LivrableRepository livrableRepo,
                                MissionRepository missionRepo,
                                UtilisateurRepository userRepo,
-                               FileStorageService fileStorage) {
+                               FileStorageService fileStorage,
+                               TranchePaiementRepository trancheRepo,
+                               EscrowService escrowService) {
         this.livrableRepo = livrableRepo;
-        this.missionRepo   = missionRepo;
-        this.userRepo      = userRepo;
-        this.fileStorage   = fileStorage;
+        this.missionRepo = missionRepo;
+        this.userRepo = userRepo;
+        this.fileStorage = fileStorage;
+        this.trancheRepo = trancheRepo;
+        this.escrowService = escrowService;
     }
 
     /* ========== Upload & création ========== */
@@ -55,9 +72,11 @@ public class LivrableServiceImpl implements LivrableService {
 
         if (!freelance.getId().equals(
                 mission.getFreelanceSelectionne() != null
-                  ? mission.getFreelanceSelectionne().getId()
-                  : null))
-            throw new IllegalStateException("Vous n’êtes pas autorisé à livrer sur cette mission");
+                    ? mission.getFreelanceSelectionne().getId()
+                    : null)) {
+            // 403
+            throw new BusinessException("Accès refusé");
+        }
 
         Livrable liv = new Livrable();
         liv.setTitre(req.getTitre());
@@ -72,8 +91,7 @@ public class LivrableServiceImpl implements LivrableService {
                     String url = fileStorage.save(f);
                     chemins.add(url);
                 } catch (IOException e) {
-                    throw new RuntimeException(
-                        "Erreur upload fichier : " + f.getOriginalFilename(), e);
+                    throw new RuntimeException("Erreur upload fichier : " + f.getOriginalFilename(), e);
                 }
             }
         }
@@ -87,24 +105,18 @@ public class LivrableServiceImpl implements LivrableService {
     /* ========== Listing mission ========== */
     @Override
     @Transactional(readOnly = true)
-    public List<LivrableDto> getLivrablesForMission(Long missionId,
-                                                    StatusLivrable status,
-                                                    Sort sort) {
-
+    public List<LivrableDto> getLivrablesForMission(Long missionId, StatusLivrable status, Sort sort) {
         List<Livrable> list = (status == null)
             ? livrableRepo.findByMissionId(missionId, sort)
             : livrableRepo.findByMissionIdAndStatus(missionId, status, sort);
 
-        return list.stream()
-                   .map(this::mapToDto)
-                   .collect(Collectors.toList());
+        return list.stream().map(this::mapToDto).collect(Collectors.toList());
     }
 
     /* ========== Listing freelance ========== */
     @Override
     @Transactional(readOnly = true)
-    public List<LivrableDto> getLivrablesForFreelancer(Long freelancerId,
-                                                       Sort sort) {
+    public List<LivrableDto> getLivrablesForFreelancer(Long freelancerId, Sort sort) {
         return livrableRepo.findByFreelancerId(freelancerId, sort)
                            .stream()
                            .map(this::mapToDto)
@@ -116,29 +128,93 @@ public class LivrableServiceImpl implements LivrableService {
     public void validerLivrable(Long livrableId, Long clientId) {
         Livrable liv = getAndCheckClientRights(livrableId, clientId);
         liv.setStatus(StatusLivrable.VALIDE);
-        // Le paiement (EscrowService) déclenchera la mise en TERMINEE
+        livrableRepo.save(liv); // ✅ sauvegarde explicite, plus lisible
+
+        // Logging avant paiement
+        logger.info("Début paiement pour livrable - livrableId: {}, clientId: {}", livrableId, clientId);
+
+        Long missionId = liv.getMission().getId();
+
+        // La sélection de tranche est verrouillée pessimiste dans le repo
+        if ("DIRECT_FLOUCI".equalsIgnoreCase(paymentMode)) {
+            TranchePaiement tranche = trancheRepo
+                .findNextForUpdate(missionId, StatutTranche.EN_ATTENTE_DEPOT)
+                .orElseThrow(() -> new IllegalArgumentException(
+                    "Aucune tranche de paiement n'est définie. Créez un plan de paiement pour régler le freelance.")); // 422
+
+            // ✅ anti double-liaison → 409
+            logger.info("Tranche trouvée pour paiement direct - trancheId: {}, livrableId: {}", 
+                    tranche.getId(), liv.getId());
+
+            if (tranche.getLivrableAssocie() != null
+                && !tranche.getLivrableAssocie().getId().equals(liv.getId())) {
+                throw new IllegalStateException("Cette tranche est déjà liée à un autre livrable."); // 409
+            }
+
+            tranche.setLivrableAssocie(liv);
+            trancheRepo.save(tranche);
+
+            // Génère le lien et passe EN_ATTENTE_PAIEMENT
+            escrowService.initPaiementDirect(tranche.getId(), clientId);
+
+            logger.info("Paiement direct initié - trancheId: {}, clientId: {}", tranche.getId(), clientId);
+
+        } else if ("ESCROW_PAYMEE".equalsIgnoreCase(paymentMode)) {
+            TranchePaiement tranche = trancheRepo
+                .findNextForUpdate(missionId, StatutTranche.FONDS_BLOQUES)
+                .orElseThrow(() -> new IllegalArgumentException(
+                    "Aucune tranche avec fonds bloqués pour cette mission. Initiez un paiement (escrow) d'abord.")); // 422
+
+            // ✅ anti double-liaison → 409
+            logger.info("Tranche escrow trouvée - trancheId: {}, livrableId: {}", 
+                    tranche.getId(), liv.getId());
+
+            if (tranche.getLivrableAssocie() != null
+                && !tranche.getLivrableAssocie().getId().equals(liv.getId())) {
+                throw new IllegalStateException("Cette tranche est déjà liée à un autre livrable."); // 409
+            }
+
+            tranche.setLivrableAssocie(liv);
+            trancheRepo.save(tranche);
+
+            // Valide la tranche (capture après commit via event)
+            escrowService.validerLivrable(tranche.getId(), clientId);
+
+            logger.info("Validation escrow initiée - trancheId: {}, clientId: {}", tranche.getId(), clientId);
+        } else {
+            // 409 (conflit de configuration)
+            throw new IllegalStateException("Mode de paiement inconnu: " + paymentMode);
+        }
     }
 
     @Override
     public void rejeterLivrable(Long livrableId, Long clientId, String raison) {
         Livrable liv = getAndCheckClientRights(livrableId, clientId);
         liv.setStatus(StatusLivrable.REJETE);
-        // Mission reste EN_COURS pour permettre un nouvel upload éventuel
         if (raison != null) {
             String desc = liv.getDescription() == null ? "" : liv.getDescription() + "\n";
             liv.setDescription(desc + "Motif rejet : " + raison);
         }
+        livrableRepo.save(liv);
     }
 
     /* ========== Helpers ========== */
     private Livrable getAndCheckClientRights(Long livrableId, Long clientId) {
         Livrable liv = livrableRepo.findById(livrableId)
-            .orElseThrow(() -> new IllegalArgumentException("Livrable inconnu"));
+            .orElseThrow(() -> new IllegalArgumentException("Livrable inconnu")); // 422
+
+        Long missionId = liv.getMission().getId();
+        Long ownerIdInDb = liv.getMission().getClient().getId();
+
+        // Logging structuré pour tracer les droits d'accès
+        logger.info("Vérification droits client - livrableId: {}, missionId: {}, ownerIdInDb: {}, clientIdInput: {}",
+                livrableId, missionId, ownerIdInDb, clientId);
 
         Long ownerId = liv.getMission().getClient().getId();
         if (!ownerId.equals(clientId)) {
-            throw new IllegalStateException(
-                "Vous n’êtes pas autorisé à valider/rejeter ce livrable");
+            logger.warn("Accès refusé - mismatch clientId - livrableId: {}, ownerIdInDb: {}, clientIdInput: {}",
+                    livrableId, ownerIdInDb, clientId);
+            throw new BusinessException("Accès refusé");
         }
         return liv;
     }
