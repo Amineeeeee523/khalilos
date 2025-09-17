@@ -339,7 +339,7 @@ public class EscrowService {
 
     /* ---------- Recompute statut mission (politique de clôture) ---------- */
     @Transactional
-    protected void recomputeMissionStatus(Long missionId) {
+    public void recomputeMissionStatus(Long missionId) {
         Mission mission = missionRepo.findById(missionId)
             .orElseThrow(() -> new ResourceNotFoundException("Mission introuvable"));
 
@@ -394,6 +394,9 @@ public class EscrowService {
         }
 
         missionRepo.save(mission);
+        if (mission.getStatut() == Mission.Statut.TERMINEE) {
+            publisher.publishEvent(new com.projet.freelencetinder.servcie.FeedbackEvents.MissionClosedEvent(missionId));
+        }
     }
 
     /* ---------- Mutations de configuration / confirmations ---------- */

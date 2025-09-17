@@ -305,6 +305,16 @@ public class MissionController {
         return ResponseEntity.ok(missionService.buildDetailView(id, viewerId));
     }
 
+    @GetMapping("/{id}/freelancer-view")
+    public ResponseEntity<com.projet.freelencetinder.dto.FreelancerMissionDetailDTO> getFreelancerMissionDetailView(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", required = false) Long headerUserId) {
+        Long viewerId = (headerUserId != null) ? headerUserId : null;
+        return ResponseEntity.ok(missionService.buildFreelancerDetailView(id, viewerId));
+    }
+
+    
+
     /* ====================== AJOUTS : politique de clôture ====================== */
     @PatchMapping("/{missionId}/closure-policy")
     public ResponseEntity<Mission> updateClosurePolicy(@PathVariable Long missionId,

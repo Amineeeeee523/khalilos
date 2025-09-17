@@ -2,15 +2,12 @@ package com.projet.freelencetinder.servcie;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -21,13 +18,9 @@ import com.projet.freelencetinder.dto.MissionCardDto;
 import com.projet.freelencetinder.models.Mission;
 import com.projet.freelencetinder.models.Mission.ModaliteTravail;
 import com.projet.freelencetinder.models.Mission.Statut;
-import com.projet.freelencetinder.models.Livrable;
-import com.projet.freelencetinder.models.StatusLivrable;
-import com.projet.freelencetinder.models.TranchePaiement;
-import com.projet.freelencetinder.models.TranchePaiement.StatutTranche;
 import com.projet.freelencetinder.models.Utilisateur;
-import com.projet.freelencetinder.repository.MissionRepository;
 import com.projet.freelencetinder.repository.LivrableRepository;
+import com.projet.freelencetinder.repository.MissionRepository;
 import com.projet.freelencetinder.repository.TranchePaiementRepository;
 import com.projet.freelencetinder.repository.UtilisateurRepository;
 
@@ -427,6 +420,132 @@ public class MissionService {
             lits.add(li);
         }
         dto.setLivrables(lits);
+
+        return dto;
+    }
+
+    /* ------------------------------------------------------------------
+       Detail View côté Freelance (lecture logique)
+       ------------------------------------------------------------------ */
+    @Transactional(readOnly = true)
+    public com.projet.freelencetinder.dto.FreelancerMissionDetailDTO buildFreelancerDetailView(Long missionId, Long viewerId) {
+        Mission m = getMissionById(missionId);
+
+        var dto = new com.projet.freelencetinder.dto.FreelancerMissionDetailDTO();
+        dto.setId(m.getId());
+        dto.setTitre(m.getTitre());
+        dto.setDescription(m.getDescription());
+        dto.setCategorie(m.getCategorie());
+        dto.setStatut(m.getStatut());
+
+        // Exigences & matching
+        if (m.getCompetencesRequises() != null) {
+            dto.setCompetencesRequises(m.getCompetencesRequises().stream().toList());
+        }
+        if (m.getCompetencesPriorisees() != null) {
+            java.util.Map<String, String> priorisees = new java.util.HashMap<>();
+            for (var e : m.getCompetencesPriorisees().entrySet()) {
+                priorisees.put(e.getKey(), e.getValue() != null ? e.getValue().name() : null);
+            }
+            dto.setCompetencesPriorisees(priorisees);
+        }
+        dto.setLanguesRequises(m.getLanguesRequises());
+        dto.setNiveauExperienceMin(m.getNiveauExperienceMin());
+        dto.setScoreMatching(m.getScoreMatching());
+        dto.setRaisonsMatching(m.getRaisonsMatching());
+
+        // Budget & rémunération
+        dto.setBudget(m.getBudget());
+        dto.setDevise(m.getDevise());
+        dto.setTypeRemuneration(m.getTypeRemuneration());
+        dto.setBudgetMin(m.getBudgetMin());
+        dto.setBudgetMax(m.getBudgetMax());
+        dto.setTjmJournalier(m.getTjmJournalier());
+
+        // Planning / charge
+        dto.setDelaiLivraison(m.getDelaiLivraison());
+        dto.setDureeEstimeeJours(m.getDureeEstimeeJours());
+        dto.setDateLimiteCandidature(m.getDateLimiteCandidature());
+        dto.setDateDebutSouhaitee(m.getDateDebutSouhaitee());
+        dto.setChargeHebdoJours(m.getChargeHebdoJours());
+
+        // Localisation / modalité
+        dto.setLocalisation(m.getLocalisation());
+        dto.setGouvernorat(m.getGouvernorat());
+        dto.setModaliteTravail(m.getModaliteTravail());
+
+        // Qualité & activité
+        dto.setUrgent(m.isUrgent());
+        dto.setQualiteBrief(m.getQualiteBrief());
+        dto.setDerniereActiviteAt(m.getDerniereActiviteAt());
+        dto.setExpired(m.estExpirée());
+
+        // Stats & badges
+        dto.setCandidatsCount(m.getCandidatsCount());
+        dto.setSwipesRecus(m.getSwipesRecus());
+        dto.setLikesRecus(m.getLikesRecus());
+        dto.setBadges(m.getBadges());
+
+        // Médias
+        dto.setMediaUrls(m.getMediaUrls());
+        dto.setVideoBriefUrl(m.getVideoBriefUrl());
+
+        // Client
+        if (m.getClient() != null) dto.setClient(toClientInfoDTO(m.getClient()));
+
+        // Contexte viewer freelance
+        boolean selectionne = (m.getFreelanceSelectionne() != null
+                && viewerId != null
+                && m.getFreelanceSelectionne().getId().equals(viewerId));
+        dto.setSelectionne(selectionne);
+        dto.setCanDeliver(selectionne);
+
+        // Si sélectionné, exposer paiements et livrables
+        if (selectionne) {
+            var sum = escrowService.summary(missionId, viewerId);
+            var p = new com.projet.freelencetinder.dto.PaymentMiniDTO();
+            p.setTotalBrut(sum.getTotalBrut());
+            p.setTotalNetFreelance(sum.getTotalNetFreelance());
+            p.setPaidTotal(sum.getPaidTotal());
+            int pct = (sum.getTotalBrut() == null || sum.getTotalBrut().signum() == 0)
+                    ? 0
+                    : sum.getPaidTotal().multiply(java.math.BigDecimal.valueOf(100))
+                        .divide(sum.getTotalBrut(), java.math.RoundingMode.DOWN).intValue();
+            p.setProgressionPct(pct);
+
+            var minis = new java.util.ArrayList<com.projet.freelencetinder.dto.TrancheMiniDTO>();
+            for (var t : sum.getTranches()) {
+                var mi = new com.projet.freelencetinder.dto.TrancheMiniDTO();
+                mi.setId(t.getId());
+                mi.setOrdre(t.getOrdre());
+                mi.setTitre(t.getTitre());
+                mi.setStatut(t.getStatut());
+                mi.setMontantBrut(t.getMontantBrut());
+                mi.setRequired(t.isRequired());
+                mi.setFinale(t.isFinale());
+                mi.setPaymentUrl(t.getPaymeePaymentUrl());
+                minis.add(mi);
+            }
+            p.setTranches(minis);
+            dto.setPaiements(p);
+
+            var lits = new java.util.ArrayList<com.projet.freelencetinder.dto.LivrableLiteDTO>();
+            for (var lv : listLivrables(missionId)) {
+                var li = new com.projet.freelencetinder.dto.LivrableLiteDTO();
+                li.setId(lv.getId());
+                li.setTitre(lv.getTitre());
+                li.setDescription(lv.getDescription());
+                li.setStatus(lv.getStatus());
+                li.setDateEnvoi(lv.getDateEnvoi());
+                li.setCheminsFichiers(lv.getCheminsFichiers());
+                li.setLiensExternes(lv.getLiensExternes());
+                // Côté freelance: actions gérées ailleurs; flags d'action non nécessaires ici
+                li.setCanValidate(false);
+                li.setCanReject(false);
+                lits.add(li);
+            }
+            dto.setLivrables(lits);
+        }
 
         return dto;
     }

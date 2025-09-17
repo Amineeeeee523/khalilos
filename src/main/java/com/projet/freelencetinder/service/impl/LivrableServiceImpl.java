@@ -185,6 +185,11 @@ public class LivrableServiceImpl implements LivrableService {
             // 409 (conflit de configuration)
             throw new IllegalStateException("Mode de paiement inconnu: " + paymentMode);
         }
+
+        // ✅ Recalculer le statut de la mission après validation du livrable
+        // Cela permet de mettre à jour le statut mission (PRÊT_A_CLOTURER → TERMINEE)
+        // en tenant compte du livrable maintenant validé (deliveryAccepted = true)
+        escrowService.recomputeMissionStatus(missionId);
     }
 
     @Override
